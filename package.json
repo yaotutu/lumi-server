@@ -34,8 +34,10 @@
 		"fastify": "^5.2.0",
 		"ioredis": "^5.4.1",
 		"mysql2": "^3.15.3",
+		"openai": "^6.10.0",
 		"pino": "^9.5.0",
 		"pino-pretty": "^13.0.0",
+		"tencentcloud-sdk-nodejs-ai3d": "^4.1.155",
 		"zod": "^3.24.1"
 	},
 	"devDependencies": {
