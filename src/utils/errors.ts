@@ -52,3 +52,43 @@ export class ServiceUnavailableError extends AppError {
 		super(message, 503, 'SERVICE_UNAVAILABLE');
 	}
 }
+
+/**
+ * 无效状态错误 (409 Conflict)
+ */
+export class InvalidStateError extends AppError {
+	constructor(message: string, details?: unknown) {
+		super(message, 409, 'INVALID_STATE', details);
+	}
+}
+
+/**
+ * 队列已满错误 (503 Service Unavailable)
+ */
+export class QueueFullError extends AppError {
+	constructor(message = 'Queue is full') {
+		super(message, 503, 'QUEUE_FULL');
+	}
+}
+
+/**
+ * 数据库错误 (500 Internal Server Error)
+ */
+export class DatabaseError extends AppError {
+	constructor(message: string, details?: unknown) {
+		super(message, 500, 'DATABASE_ERROR', details);
+	}
+}
+
+/**
+ * 外部 API 错误 (500 Internal Server Error)
+ */
+export class ExternalAPIError extends AppError {
+	constructor(
+		message: string,
+		public readonly provider?: string,
+		details?: unknown,
+	) {
+		super(message, 500, 'EXTERNAL_API_ERROR', details);
+	}
+}
