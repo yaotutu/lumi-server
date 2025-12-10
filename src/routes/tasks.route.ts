@@ -24,7 +24,8 @@ export async function taskRoutes(fastify: FastifyInstance) {
 			// 从认证中间件获取 userId (暂时使用测试 ID)
 			const userId = (request.headers['x-user-id'] as string) || 'test-user-id';
 
-			const { limit = 20 } = request.query as { limit?: number };
+			const query = request.query as { limit?: string };
+			const limit = Number.parseInt(query.limit || '20', 10);
 
 			const requests = await GenerationRequestService.listRequests(userId, { limit });
 

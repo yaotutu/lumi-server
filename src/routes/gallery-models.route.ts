@@ -20,7 +20,9 @@ export async function galleryModelRoutes(fastify: FastifyInstance) {
 	fastify.get('/api/gallery/models/me', async (request, reply) => {
 		try {
 			const userId = (request.headers['x-user-id'] as string) || 'test-user-id';
-			const { limit = 20, offset = 0 } = request.query as { limit?: number; offset?: number };
+			const query = request.query as { limit?: string; offset?: string };
+			const limit = Number.parseInt(query.limit || '20', 10);
+			const offset = Number.parseInt(query.offset || '0', 10);
 
 			const models = await ModelService.getUserModels(userId, { limit, offset });
 
@@ -37,15 +39,15 @@ export async function galleryModelRoutes(fastify: FastifyInstance) {
 	 */
 	fastify.get('/api/gallery/models', async (request, reply) => {
 		try {
-			const {
-				sortBy = 'latest',
-				limit = 20,
-				offset = 0,
-			} = request.query as {
-				sortBy?: 'latest' | 'popular' | 'liked';
-				limit?: number;
-				offset?: number;
+			const query = request.query as {
+				sortBy?: string;
+				limit?: string;
+				offset?: string;
 			};
+
+			const sortBy = (query.sortBy || 'latest') as 'latest' | 'popular' | 'liked';
+			const limit = Number.parseInt(query.limit || '20', 10);
+			const offset = Number.parseInt(query.offset || '0', 10);
 
 			const models = await ModelService.getPublicModels({ sortBy, limit, offset });
 

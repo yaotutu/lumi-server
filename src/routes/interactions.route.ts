@@ -92,7 +92,9 @@ export async function interactionRoutes(fastify: FastifyInstance) {
 	fastify.get('/api/me/liked-models', async (request, reply) => {
 		try {
 			const userId = (request.headers['x-user-id'] as string) || 'test-user-id';
-			const { limit = 20, offset = 0 } = request.query as { limit?: number; offset?: number };
+			const query = request.query as { limit?: string; offset?: string };
+			const limit = Number.parseInt(query.limit || '20', 10);
+			const offset = Number.parseInt(query.offset || '0', 10);
 
 			const models = await InteractionService.getUserLikedModels(userId, { limit, offset });
 
@@ -110,7 +112,9 @@ export async function interactionRoutes(fastify: FastifyInstance) {
 	fastify.get('/api/me/favorited-models', async (request, reply) => {
 		try {
 			const userId = (request.headers['x-user-id'] as string) || 'test-user-id';
-			const { limit = 20, offset = 0 } = request.query as { limit?: number; offset?: number };
+			const query = request.query as { limit?: string; offset?: string };
+			const limit = Number.parseInt(query.limit || '20', 10);
+			const offset = Number.parseInt(query.offset || '0', 10);
 
 			const models = await InteractionService.getUserFavoritedModels(userId, { limit, offset });
 

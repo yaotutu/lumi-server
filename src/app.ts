@@ -18,6 +18,7 @@ export async function buildApp() {
 							colorize: true,
 							translateTime: 'HH:MM:ss Z',
 							ignore: 'pid,hostname',
+							singleLine: true,
 						},
 					},
 				}

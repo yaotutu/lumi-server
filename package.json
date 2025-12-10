@@ -8,6 +8,9 @@
 		"dev": "tsx watch src/server.ts",
 		"build": "tsc",
 		"start": "node dist/server.js",
+		"test": "vitest",
+		"test:watch": "vitest --watch",
+		"test:ui": "vitest --ui",
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "drizzle-kit migrate",
 		"db:push": "drizzle-kit push --force",
@@ -17,7 +20,13 @@
 		"format": "biome format --write .",
 		"check": "biome check --write . && tsc --noEmit"
 	},
-	"keywords": ["fastify", "drizzle", "redis", "bullmq", "s3"],
+	"keywords": [
+		"fastify",
+		"drizzle",
+		"redis",
+		"bullmq",
+		"s3"
+	],
 	"author": "",
 	"license": "MIT",
 	"dependencies": {
@@ -44,8 +53,11 @@
 	"devDependencies": {
 		"@biomejs/biome": "^1.9.4",
 		"@types/node": "^22.10.2",
+		"@types/supertest": "^6.0.3",
 		"drizzle-kit": "^0.30.1",
+		"supertest": "^7.1.4",
 		"tsx": "^4.19.2",
-		"typescript": "^5.7.2"
+		"typescript": "^5.7.2",
+		"vitest": "^4.0.15"
 	}
 }
