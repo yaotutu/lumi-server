@@ -1,0 +1,152 @@
+/**
+ * Generation Request Routes
+ * 生成请求相关的 API 路由
+ */
+
+import { imageQueue } from '@/queues';
+import * as GenerationRequestService from '@/services/generation-request.service';
+import * as PromptOptimizerService from '@/services/prompt-optimizer.service';
+import { ValidationError } from '@/utils/errors';
+import { logger } from '@/utils/logger';
+import { fail, success } from '@/utils/response';
+import type { FastifyInstance } from 'fastify';
+
+/**
+ * 注册生成请求路由
+ */
+export async function requestRoutes(fastify: FastifyInstance) {
+	/**
+	 * GET /api/requests
+	 * 获取用户的生成请求列表
+	 */
+	fastify.get('/api/requests', async (request, reply) => {
+		try {
+			// 从认证中间件获取 userId (暂时使用测试 ID)
+			const userId = (request.headers['x-user-id'] as string) || 'test-user-id';
+
+			const { limit = 20 } = request.query as { limit?: number };
+
+			const requests = await GenerationRequestService.listRequests(userId, { limit });
+
+			return reply.send(success(requests));
+		} catch (error) {
+			logger.error({ msg: '获取生成请求列表失败', error });
+			return reply.status(500).send(fail('获取生成请求列表失败'));
+		}
+	});
+
+	/**
+	 * GET /api/requests/:id
+	 * 获取生成请求详情
+	 */
+	fastify.get<{ Params: { id: string } }>('/api/requests/:id', async (request, reply) => {
+		try {
+			const { id } = request.params;
+
+			const generationRequest = await GenerationRequestService.getRequestById(id);
+
+			return reply.send(success(generationRequest));
+		} catch (error) {
+			logger.error({ msg: '获取生成请求详情失败', error, requestId: request.params.id });
+
+			if (error instanceof Error && error.message.includes('不存在')) {
+				return reply.status(404).send(fail(error.message));
+			}
+
+			return reply.status(500).send(fail('获取生成请求详情失败'));
+		}
+	});
+
+	/**
+	 * POST /api/requests
+	 * 创建新的生成请求
+	 */
+	fastify.post<{
+		Body: {
+			prompt: string;
+			optimizePrompt?: boolean;
+		};
+	}>('/api/requests', async (request, reply) => {
+		try {
+			const userId = (request.headers['x-user-id'] as string) || 'test-user-id';
+			const { prompt, optimizePrompt = true } = request.body;
+
+			// 验证提示词
+			if (!prompt || prompt.trim().length === 0) {
+				throw new ValidationError('提示词不能为空');
+			}
+
+			// 优化提示词 (可选)
+			let finalPrompt = prompt.trim();
+			if (optimizePrompt) {
+				logger.info({ msg: '开始优化提示词', originalPrompt: prompt });
+				finalPrompt = await PromptOptimizerService.optimizePromptFor3DPrint(prompt);
+			}
+
+			// 创建生成请求
+			const generationRequest = await GenerationRequestService.createRequest(userId, finalPrompt);
+
+			// 将 4 个图片生成任务加入队列
+			const imageJobs = await Promise.all(
+				Array.from({ length: 4 }, async (_, index) => {
+					return imageQueue.add(`image-${generationRequest.id}-${index}`, {
+						jobId: generationRequest.id, // TODO: 这里应该使用 ImageJob 的 ID
+						imageId: generationRequest.id, // TODO: 需要从 generatedImages 中获取
+						prompt: finalPrompt,
+						requestId: generationRequest.id,
+						userId,
+					});
+				}),
+			);
+
+			logger.info({
+				msg: '✅ 生成请求创建成功',
+				requestId: generationRequest.id,
+				jobCount: imageJobs.length,
+			});
+
+			return reply.status(201).send(
+				success({
+					request: generationRequest,
+					message: '生成请求已创建,图片生成任务已加入队列',
+				}),
+			);
+		} catch (error) {
+			logger.error({ msg: '创建生成请求失败', error });
+
+			if (error instanceof ValidationError) {
+				return reply.status(400).send(fail(error.message));
+			}
+
+			return reply.status(500).send(fail('创建生成请求失败'));
+		}
+	});
+
+	/**
+	 * DELETE /api/requests/:id
+	 * 删除生成请求
+	 */
+	fastify.delete<{ Params: { id: string } }>('/api/requests/:id', async (request, reply) => {
+		try {
+			const { id } = request.params;
+
+			await GenerationRequestService.deleteRequest(id);
+
+			logger.info({ msg: '✅ 生成请求删除成功', requestId: id });
+
+			return reply.send(success({ message: '生成请求已删除' }));
+		} catch (error) {
+			logger.error({ msg: '删除生成请求失败', error, requestId: request.params.id });
+
+			if (error instanceof Error && error.message.includes('不存在')) {
+				return reply.status(404).send(fail(error.message));
+			}
+
+			if (error instanceof Error && error.message.includes('无权限')) {
+				return reply.status(403).send(fail(error.message));
+			}
+
+			return reply.status(500).send(fail('删除生成请求失败'));
+		}
+	});
+}
