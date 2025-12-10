@@ -120,4 +120,60 @@ export async function interactionRoutes(fastify: FastifyInstance) {
 			return reply.status(500).send(fail('获取收藏模型列表失败'));
 		}
 	});
+
+	/**
+	 * POST /api/gallery/models/batch-interactions
+	 * 批量获取用户对多个模型的交互状态
+	 */
+	fastify.post<{
+		Body: { modelIds: string[] };
+	}>('/api/gallery/models/batch-interactions', async (request, reply) => {
+		try {
+			const userId = request.headers['x-user-id'] as string;
+			const { modelIds } = request.body;
+
+			// 验证参数
+			if (!Array.isArray(modelIds)) {
+				return reply.status(400).send(fail('modelIds 必须是数组'));
+			}
+
+			if (modelIds.length === 0) {
+				return reply.status(400).send(fail('modelIds 不能为空'));
+			}
+
+			if (modelIds.length > 50) {
+				return reply.status(400).send(fail('最多一次查询 50 个模型'));
+			}
+
+			// 用户未登录
+			if (!userId) {
+				return reply.send(
+					success({
+						isAuthenticated: false,
+						interactions: {},
+					}),
+				);
+			}
+
+			// 批量查询交互状态
+			const interactions = await InteractionService.getBatchInteractions(userId, modelIds);
+
+			logger.info({
+				msg: '✅ 批量查询交互状态',
+				userId,
+				modelCount: modelIds.length,
+				interactionCount: Object.keys(interactions).length,
+			});
+
+			return reply.send(
+				success({
+					isAuthenticated: true,
+					interactions,
+				}),
+			);
+		} catch (error) {
+			logger.error({ msg: '批量查询交互状态失败', error });
+			return reply.status(500).send(fail('批量查询交互状态失败'));
+		}
+	});
 }

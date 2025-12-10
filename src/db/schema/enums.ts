@@ -91,3 +91,21 @@ export type ModelVisibility = 'PRIVATE' | 'PUBLIC';
 export const interactionTypeEnum = mysqlEnum('interaction_type', ['LIKE', 'FAVORITE']);
 
 export type InteractionType = 'LIKE' | 'FAVORITE';
+
+// 打印状态
+export const printStatusEnum = mysqlEnum('print_status', [
+	'NOT_STARTED',
+	'SLICING',
+	'SLICE_COMPLETE',
+	'PRINTING',
+	'PRINT_COMPLETE',
+	'FAILED',
+]);
+
+export type PrintStatus =
+	| 'NOT_STARTED'
+	| 'SLICING'
+	| 'SLICE_COMPLETE'
+	| 'PRINTING'
+	| 'PRINT_COMPLETE'
+	| 'FAILED';

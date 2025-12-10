@@ -200,4 +200,74 @@ export async function taskRoutes(fastify: FastifyInstance) {
 			return reply.status(500).send(fail('删除生成请求失败'));
 		}
 	});
+
+	/**
+	 * POST /api/tasks/:id/print
+	 * 提交打印任务
+	 */
+	fastify.post<{ Params: { id: string } }>('/api/tasks/:id/print', async (request, reply) => {
+		try {
+			const { id } = request.params;
+			const userId = (request.headers['x-user-id'] as string) || 'test-user-id';
+
+			// 提交打印任务
+			const result = await GenerationRequestService.submitPrintTask(id, userId);
+
+			logger.info({
+				msg: '✅ 打印任务提交成功',
+				requestId: id,
+				modelId: result.modelId,
+				sliceTaskId: result.sliceTaskId,
+			});
+
+			return reply.send(
+				success({
+					sliceTaskId: result.sliceTaskId,
+					printResult: result.printResult,
+					message: '打印任务已提交',
+				}),
+			);
+		} catch (error) {
+			logger.error({ msg: '提交打印任务失败', error, requestId: request.params.id });
+
+			if (error instanceof ValidationError) {
+				return reply.status(400).send(fail(error.message));
+			}
+
+			if (error instanceof Error && error.message.includes('不存在')) {
+				return reply.status(404).send(fail(error.message));
+			}
+
+			return reply.status(500).send(fail('提交打印任务失败'));
+		}
+	});
+
+	/**
+	 * GET /api/tasks/:id/print-status
+	 * 查询打印状态
+	 */
+	fastify.get<{ Params: { id: string } }>('/api/tasks/:id/print-status', async (request, reply) => {
+		try {
+			const { id } = request.params;
+
+			// 查询打印状态
+			const result = await GenerationRequestService.getPrintStatus(id);
+
+			return reply.send(
+				success({
+					printStatus: result.printStatus,
+					sliceTaskId: result.sliceTaskId,
+					progress: result.progress,
+				}),
+			);
+		} catch (error) {
+			logger.error({ msg: '查询打印状态失败', error, requestId: request.params.id });
+
+			if (error instanceof Error && error.message.includes('不存在')) {
+				return reply.status(404).send(fail(error.message));
+			}
+
+			return reply.status(500).send(fail('查询打印状态失败'));
+		}
+	});
 }

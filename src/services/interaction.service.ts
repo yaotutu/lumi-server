@@ -72,3 +72,34 @@ export async function getUserFavoritedModels(
 	if (modelIds.length === 0) return [];
 	return modelRepository.findByIds(modelIds);
 }
+
+/**
+ * 批量获取用户对多个模型的交互状态
+ *
+ * @param userId 用户ID
+ * @param modelIds 模型ID数组
+ * @returns 交互状态映射 { modelId: ['LIKE'] | ['FAVORITE'] | ['LIKE', 'FAVORITE'] | [] }
+ */
+export async function getBatchInteractions(
+	userId: string,
+	modelIds: string[],
+): Promise<Record<string, string[]>> {
+	// 初始化结果对象，所有模型默认为空数组
+	const result: Record<string, string[]> = {};
+	for (const modelId of modelIds) {
+		result[modelId] = [];
+	}
+
+	// 批量查询交互记录
+	const interactions = await interactionRepository.findBatchInteractions(userId, modelIds);
+
+	// 填充交互状态
+	for (const interaction of interactions) {
+		if (!result[interaction.modelId]) {
+			result[interaction.modelId] = [];
+		}
+		result[interaction.modelId].push(interaction.type);
+	}
+
+	return result;
+}

@@ -233,3 +233,131 @@ export async function deleteRequest(requestId: string) {
 		requestId,
 	});
 }
+
+/**
+ * 提交打印任务
+ *
+ * 业务流程:
+ * 1. 验证请求存在和用户权限
+ * 2. 验证模型已生成完成
+ * 3. 检查是否已提交过打印
+ * 4. 生成 sliceTaskId
+ * 5. 更新 model.sliceTaskId 和 printStatus
+ *
+ * @param requestId 生成请求ID
+ * @param userId 用户ID（权限验证）
+ * @returns 打印任务信息
+ * @throws ValidationError - 业务验证失败
+ * @throws NotFoundError - 请求或模型不存在
+ */
+export async function submitPrintTask(requestId: string, userId: string) {
+	// 验证生成请求存在
+	const request = await getRequestById(requestId);
+
+	// 验证用户权限
+	if (request.userId !== userId) {
+		throw new ValidationError('无权限操作此生成请求');
+	}
+
+	// 验证请求已完成模型生成
+	if (request.phase !== 'MODEL_GENERATION' && request.phase !== 'COMPLETED') {
+		throw new ValidationError('请求尚未完成模型生成,无法提交打印');
+	}
+
+	// 获取模型
+	const model = await modelRepository.findByRequestId(requestId);
+	if (!model) {
+		throw new NotFoundError('未找到关联的模型');
+	}
+
+	// 验证模型已完成生成
+	if (!model.modelUrl) {
+		throw new ValidationError('模型尚未生成完成,无法提交打印');
+	}
+
+	// 检查是否已提交打印
+	if (model.sliceTaskId && model.printStatus !== 'FAILED') {
+		throw new ValidationError('打印任务已提交,请勿重复提交');
+	}
+
+	// 生成 sliceTaskId (实际项目中应调用外部打印服务 API)
+	const sliceTaskId = `slice-${createId()}`;
+
+	// 更新模型状态
+	await modelRepository.update(model.id, {
+		sliceTaskId,
+		printStatus: 'SLICING',
+	});
+
+	logger.info({
+		msg: '✅ 提交打印任务',
+		requestId,
+		modelId: model.id,
+		sliceTaskId,
+	});
+
+	// TODO: 调用外部打印服务 API
+	// const printProvider = createPrintProvider();
+	// const printResult = await printProvider.submitSliceTask({
+	//   modelUrl: model.modelUrl,
+	//   format: model.format,
+	// });
+
+	return {
+		modelId: model.id,
+		sliceTaskId,
+		printResult: {
+			status: 'SLICING',
+			message: '切片任务已提交',
+		},
+	};
+}
+
+/**
+ * 查询打印状态
+ *
+ * 业务流程:
+ * 1. 验证请求存在
+ * 2. 获取模型的 sliceTaskId 和 printStatus
+ * 3. 返回打印状态和进度
+ *
+ * @param requestId 生成请求ID
+ * @returns 打印状态信息
+ * @throws NotFoundError - 请求或模型不存在
+ * @throws ValidationError - 尚未提交打印
+ */
+export async function getPrintStatus(requestId: string) {
+	// 验证生成请求存在
+	const request = await getRequestById(requestId);
+
+	// 获取模型
+	const model = await modelRepository.findByRequestId(requestId);
+	if (!model) {
+		throw new NotFoundError('未找到关联的模型');
+	}
+
+	// 检查是否已提交打印
+	if (!model.sliceTaskId) {
+		throw new ValidationError('尚未提交打印任务');
+	}
+
+	// TODO: 调用外部打印服务查询状态
+	// const printProvider = createPrintProvider();
+	// const status = await printProvider.getSliceTaskStatus(model.sliceTaskId);
+
+	// 模拟返回打印进度
+	const progressMap: Record<string, number> = {
+		NOT_STARTED: 0,
+		SLICING: 30,
+		SLICE_COMPLETE: 50,
+		PRINTING: 75,
+		PRINT_COMPLETE: 100,
+		FAILED: 0,
+	};
+
+	return {
+		printStatus: model.printStatus,
+		sliceTaskId: model.sliceTaskId,
+		progress: progressMap[model.printStatus || 'NOT_STARTED'],
+	};
+}
