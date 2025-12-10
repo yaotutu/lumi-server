@@ -1,8 +1,8 @@
 import { createId } from '@paralleldrive/cuid2';
 import { relations } from 'drizzle-orm';
 import { index, int, mysqlTable, text, timestamp, varchar } from 'drizzle-orm/mysql-core';
-import { requestPhaseEnum, requestStatusEnum } from './enums';
-import { users } from './users';
+import { requestPhaseEnum, requestStatusEnum } from './enums.js';
+import { users } from './users.js';
 
 /**
  * 生成请求表（主任务）
@@ -51,5 +51,5 @@ export type GenerationRequest = typeof generationRequests.$inferSelect;
 export type NewGenerationRequest = typeof generationRequests.$inferInsert;
 
 // 导入循环依赖
-import { generatedImages } from './generated-images';
-import { models } from './models';
+import { generatedImages } from './generated-images.js';
+import { models } from './models.js';

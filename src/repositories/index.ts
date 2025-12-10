@@ -8,3 +8,5 @@ export * from './model.repository';
 export * from './image-job.repository';
 export * from './model-job.repository';
 export * from './interaction.repository';
+export * from './user.repository';
+export * from './email-verification-code.repository';

@@ -12,12 +12,12 @@ import type { FastifyInstance } from 'fastify';
 /**
  * 注册模型管理路由
  */
-export async function modelRoutes(fastify: FastifyInstance) {
+export async function galleryModelRoutes(fastify: FastifyInstance) {
 	/**
-	 * GET /api/models/me
+	 * GET /api/gallery/models/me
 	 * 获取当前用户的模型列表
 	 */
-	fastify.get('/api/models/me', async (request, reply) => {
+	fastify.get('/api/gallery/models/me', async (request, reply) => {
 		try {
 			const userId = (request.headers['x-user-id'] as string) || 'test-user-id';
 			const { limit = 20, offset = 0 } = request.query as { limit?: number; offset?: number };
@@ -32,10 +32,10 @@ export async function modelRoutes(fastify: FastifyInstance) {
 	});
 
 	/**
-	 * GET /api/models/public
+	 * GET /api/gallery/models
 	 * 获取公开模型列表
 	 */
-	fastify.get('/api/models/public', async (request, reply) => {
+	fastify.get('/api/gallery/models', async (request, reply) => {
 		try {
 			const {
 				sortBy = 'latest',
@@ -60,7 +60,7 @@ export async function modelRoutes(fastify: FastifyInstance) {
 	 * GET /api/models/:id
 	 * 获取模型详情
 	 */
-	fastify.get<{ Params: { id: string } }>('/api/models/:id', async (request, reply) => {
+	fastify.get<{ Params: { id: string } }>('/api/gallery/models/:id', async (request, reply) => {
 		try {
 			const { id } = request.params;
 
@@ -90,7 +90,7 @@ export async function modelRoutes(fastify: FastifyInstance) {
 			requestId: string;
 			imageIndex: number;
 		};
-	}>('/api/models', async (request, reply) => {
+	}>('/api/gallery/models', async (request, reply) => {
 		try {
 			const userId = (request.headers['x-user-id'] as string) || 'test-user-id';
 			const { requestId, imageIndex } = request.body;
@@ -148,7 +148,7 @@ export async function modelRoutes(fastify: FastifyInstance) {
 			name?: string;
 			description?: string;
 		};
-	}>('/api/models/:id', async (request, reply) => {
+	}>('/api/gallery/models/:id', async (request, reply) => {
 		try {
 			const userId = (request.headers['x-user-id'] as string) || 'test-user-id';
 			const { id } = request.params;
@@ -176,65 +176,71 @@ export async function modelRoutes(fastify: FastifyInstance) {
 	 * POST /api/models/:id/publish
 	 * 发布模型
 	 */
-	fastify.post<{ Params: { id: string } }>('/api/models/:id/publish', async (request, reply) => {
-		try {
-			const userId = (request.headers['x-user-id'] as string) || 'test-user-id';
-			const { id } = request.params;
+	fastify.post<{ Params: { id: string } }>(
+		'/api/gallery/models/:id/publish',
+		async (request, reply) => {
+			try {
+				const userId = (request.headers['x-user-id'] as string) || 'test-user-id';
+				const { id } = request.params;
 
-			const model = await ModelService.publishModel(id, userId);
+				const model = await ModelService.publishModel(id, userId);
 
-			return reply.send(success(model));
-		} catch (error) {
-			logger.error({ msg: '发布模型失败', error, modelId: request.params.id });
+				return reply.send(success(model));
+			} catch (error) {
+				logger.error({ msg: '发布模型失败', error, modelId: request.params.id });
 
-			if (error instanceof Error && error.message.includes('不存在')) {
-				return reply.status(404).send(fail(error.message));
+				if (error instanceof Error && error.message.includes('不存在')) {
+					return reply.status(404).send(fail(error.message));
+				}
+
+				if (error instanceof Error && error.message.includes('无权限')) {
+					return reply.status(403).send(fail(error.message));
+				}
+
+				if (error instanceof Error && error.message.includes('状态')) {
+					return reply.status(409).send(fail(error.message));
+				}
+
+				return reply.status(500).send(fail('发布模型失败'));
 			}
-
-			if (error instanceof Error && error.message.includes('无权限')) {
-				return reply.status(403).send(fail(error.message));
-			}
-
-			if (error instanceof Error && error.message.includes('状态')) {
-				return reply.status(409).send(fail(error.message));
-			}
-
-			return reply.status(500).send(fail('发布模型失败'));
-		}
-	});
+		},
+	);
 
 	/**
 	 * POST /api/models/:id/unpublish
 	 * 取消发布模型
 	 */
-	fastify.post<{ Params: { id: string } }>('/api/models/:id/unpublish', async (request, reply) => {
-		try {
-			const userId = (request.headers['x-user-id'] as string) || 'test-user-id';
-			const { id } = request.params;
+	fastify.post<{ Params: { id: string } }>(
+		'/api/gallery/models/:id/unpublish',
+		async (request, reply) => {
+			try {
+				const userId = (request.headers['x-user-id'] as string) || 'test-user-id';
+				const { id } = request.params;
 
-			const model = await ModelService.unpublishModel(id, userId);
+				const model = await ModelService.unpublishModel(id, userId);
 
-			return reply.send(success(model));
-		} catch (error) {
-			logger.error({ msg: '取消发布模型失败', error, modelId: request.params.id });
+				return reply.send(success(model));
+			} catch (error) {
+				logger.error({ msg: '取消发布模型失败', error, modelId: request.params.id });
 
-			if (error instanceof Error && error.message.includes('不存在')) {
-				return reply.status(404).send(fail(error.message));
+				if (error instanceof Error && error.message.includes('不存在')) {
+					return reply.status(404).send(fail(error.message));
+				}
+
+				if (error instanceof Error && error.message.includes('无权限')) {
+					return reply.status(403).send(fail(error.message));
+				}
+
+				return reply.status(500).send(fail('取消发布模型失败'));
 			}
-
-			if (error instanceof Error && error.message.includes('无权限')) {
-				return reply.status(403).send(fail(error.message));
-			}
-
-			return reply.status(500).send(fail('取消发布模型失败'));
-		}
-	});
+		},
+	);
 
 	/**
 	 * DELETE /api/models/:id
 	 * 删除模型
 	 */
-	fastify.delete<{ Params: { id: string } }>('/api/models/:id', async (request, reply) => {
+	fastify.delete<{ Params: { id: string } }>('/api/gallery/models/:id', async (request, reply) => {
 		try {
 			const userId = (request.headers['x-user-id'] as string) || 'test-user-id';
 			const { id } = request.params;
@@ -261,16 +267,19 @@ export async function modelRoutes(fastify: FastifyInstance) {
 	 * POST /api/models/:id/download
 	 * 增加下载计数
 	 */
-	fastify.post<{ Params: { id: string } }>('/api/models/:id/download', async (request, reply) => {
-		try {
-			const { id } = request.params;
+	fastify.post<{ Params: { id: string } }>(
+		'/api/gallery/models/:id/download',
+		async (request, reply) => {
+			try {
+				const { id } = request.params;
 
-			await ModelService.incrementDownloadCount(id);
+				await ModelService.incrementDownloadCount(id);
 
-			return reply.send(success({ message: '下载计数已增加' }));
-		} catch (error) {
-			logger.error({ msg: '增加下载计数失败', error, modelId: request.params.id });
-			return reply.status(500).send(fail('增加下载计数失败'));
-		}
-	});
+				return reply.send(success({ message: '下载计数已增加' }));
+			} catch (error) {
+				logger.error({ msg: '增加下载计数失败', error, modelId: request.params.id });
+				return reply.status(500).send(fail('增加下载计数失败'));
+			}
+		},
+	);
 }

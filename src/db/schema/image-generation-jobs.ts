@@ -1,8 +1,8 @@
 import { createId } from '@paralleldrive/cuid2';
 import { relations } from 'drizzle-orm';
 import { index, int, mysqlTable, text, timestamp, varchar } from 'drizzle-orm/mysql-core';
-import { jobStatusEnum } from './enums';
-import { generatedImages } from './generated-images';
+import { jobStatusEnum } from './enums.js';
+import { generatedImages } from './generated-images.js';
 
 /**
  * 图片生成任务表

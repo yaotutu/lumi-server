@@ -1,7 +1,7 @@
 import { createId } from '@paralleldrive/cuid2';
 import { relations } from 'drizzle-orm';
 import { index, mysqlTable, timestamp, varchar } from 'drizzle-orm/mysql-core';
-import { users } from './users';
+import { users } from './users.js';
 
 /**
  * 邮箱验证码表

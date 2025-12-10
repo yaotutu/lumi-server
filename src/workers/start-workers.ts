@@ -17,8 +17,8 @@
 import { logger } from '@/utils/logger';
 import { redisClient } from '@/utils/redis-client';
 import type { Worker } from 'bullmq';
-import { createImageWorker } from './image.worker';
-import { createModelWorker } from './model.worker';
+import { createImageWorker } from './image.worker.js';
+import { createModelWorker } from './model.worker.js';
 
 const workers: Worker[] = [];
 
@@ -48,8 +48,16 @@ async function startWorkers() {
 	} catch (error) {
 		logger.error({
 			msg: '❌ Workers 启动失败',
-			error,
+			error:
+				error instanceof Error
+					? {
+							message: error.message,
+							stack: error.stack,
+							name: error.name,
+						}
+					: error,
 		});
+		console.error('详细错误:', error);
 		process.exit(1);
 	}
 }

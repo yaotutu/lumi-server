@@ -17,7 +17,7 @@ class RedisClient {
 				logger.warn(`Redis retry attempt ${times}, delay: ${delay}ms`);
 				return delay;
 			},
-			maxRetriesPerRequest: 3,
+			maxRetriesPerRequest: null, // BullMQ 要求必须为 null
 		});
 
 		this.client.on('connect', () => {

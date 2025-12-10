@@ -1,8 +1,8 @@
 import { createId } from '@paralleldrive/cuid2';
 import { relations } from 'drizzle-orm';
 import { index, int, mysqlTable, text, timestamp, unique, varchar } from 'drizzle-orm/mysql-core';
-import { imageStatusEnum } from './enums';
-import { generationRequests } from './generation-requests';
+import { imageStatusEnum } from './enums.js';
+import { generationRequests } from './generation-requests.js';
 
 /**
  * 生成的图片表
@@ -52,5 +52,5 @@ export type GeneratedImage = typeof generatedImages.$inferSelect;
 export type NewGeneratedImage = typeof generatedImages.$inferInsert;
 
 // 导入循环依赖
-import { imageGenerationJobs } from './image-generation-jobs';
-import { models } from './models';
+import { imageGenerationJobs } from './image-generation-jobs.js';
+import { models } from './models.js';

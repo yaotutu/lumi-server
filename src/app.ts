@@ -1,3 +1,4 @@
+import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
@@ -41,6 +42,12 @@ export async function buildApp() {
 				},
 	});
 
+	// Cookie 支持
+	await app.register(cookie, {
+		secret: process.env.COOKIE_SECRET || 'lumi-server-secret-key-change-in-production',
+		parseOptions: {},
+	});
+
 	// CORS 配置
 	await app.register(cors, {
 		origin: config.isDevelopment, // 生产环境需配置具体域名
@@ -58,7 +65,7 @@ export async function buildApp() {
 	app.setErrorHandler(errorHandler);
 
 	// 注册路由
-	await app.register(routes, { prefix: '/api' });
+	await app.register(routes);
 
 	return app;
 }

@@ -16,54 +16,60 @@ export async function interactionRoutes(fastify: FastifyInstance) {
 	 * POST /api/models/:id/like
 	 * 点赞/取消点赞模型
 	 */
-	fastify.post<{ Params: { id: string } }>('/api/models/:id/like', async (request, reply) => {
-		try {
-			const userId = (request.headers['x-user-id'] as string) || 'test-user-id';
-			const { id: modelId } = request.params;
+	fastify.post<{ Params: { id: string } }>(
+		'/api/gallery/models/:id/like',
+		async (request, reply) => {
+			try {
+				const userId = (request.headers['x-user-id'] as string) || 'test-user-id';
+				const { id: modelId } = request.params;
 
-			const result = await InteractionService.toggleLike(userId, modelId);
+				const result = await InteractionService.toggleLike(userId, modelId);
 
-			return reply.send(success(result));
-		} catch (error) {
-			logger.error({ msg: '点赞操作失败', error, modelId: request.params.id });
+				return reply.send(success(result));
+			} catch (error) {
+				logger.error({ msg: '点赞操作失败', error, modelId: request.params.id });
 
-			if (error instanceof Error && error.message.includes('不存在')) {
-				return reply.status(404).send(fail(error.message));
+				if (error instanceof Error && error.message.includes('不存在')) {
+					return reply.status(404).send(fail(error.message));
+				}
+
+				return reply.status(500).send(fail('点赞操作失败'));
 			}
-
-			return reply.status(500).send(fail('点赞操作失败'));
-		}
-	});
+		},
+	);
 
 	/**
 	 * POST /api/models/:id/favorite
 	 * 收藏/取消收藏模型
 	 */
-	fastify.post<{ Params: { id: string } }>('/api/models/:id/favorite', async (request, reply) => {
-		try {
-			const userId = (request.headers['x-user-id'] as string) || 'test-user-id';
-			const { id: modelId } = request.params;
+	fastify.post<{ Params: { id: string } }>(
+		'/api/gallery/models/:id/favorite',
+		async (request, reply) => {
+			try {
+				const userId = (request.headers['x-user-id'] as string) || 'test-user-id';
+				const { id: modelId } = request.params;
 
-			const result = await InteractionService.toggleFavorite(userId, modelId);
+				const result = await InteractionService.toggleFavorite(userId, modelId);
 
-			return reply.send(success(result));
-		} catch (error) {
-			logger.error({ msg: '收藏操作失败', error, modelId: request.params.id });
+				return reply.send(success(result));
+			} catch (error) {
+				logger.error({ msg: '收藏操作失败', error, modelId: request.params.id });
 
-			if (error instanceof Error && error.message.includes('不存在')) {
-				return reply.status(404).send(fail(error.message));
+				if (error instanceof Error && error.message.includes('不存在')) {
+					return reply.status(404).send(fail(error.message));
+				}
+
+				return reply.status(500).send(fail('收藏操作失败'));
 			}
-
-			return reply.status(500).send(fail('收藏操作失败'));
-		}
-	});
+		},
+	);
 
 	/**
 	 * GET /api/models/:id/interaction-status
 	 * 获取用户对模型的交互状态
 	 */
 	fastify.get<{ Params: { id: string } }>(
-		'/api/models/:id/interaction-status',
+		'/api/gallery/models/:id/interaction-status',
 		async (request, reply) => {
 			try {
 				const userId = (request.headers['x-user-id'] as string) || 'test-user-id';

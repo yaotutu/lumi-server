@@ -7,10 +7,13 @@
  * - 调用 Repository 层进行数据访问
  */
 
+import { modelQueue } from '@/queues';
 import {
 	generatedImageRepository,
 	generationRequestRepository,
 	imageJobRepository,
+	modelJobRepository,
+	modelRepository,
 } from '@/repositories';
 import { NotFoundError, ValidationError } from '@/utils/errors';
 import { logger } from '@/utils/logger';
@@ -112,6 +115,101 @@ export async function createRequest(userId: string, prompt: string) {
 
 	// 查询完整的生成请求对象（包含关联数据）
 	return getRequestById(request.id);
+}
+
+/**
+ * 选择图片并触发3D模型生成
+ *
+ * 业务流程:
+ * 1. 验证请求存在且处于正确状态
+ * 2. 验证图片已生成完成
+ * 3. 更新 GenerationRequest (selectedImageIndex, phase, status)
+ * 4. 创建 Model 和 ModelGenerationJob
+ * 5. 加入 modelQueue
+ *
+ * @param requestId 生成请求ID
+ * @param selectedImageIndex 选择的图片索引 (0-3)
+ * @returns 模型和选择的图片索引
+ * @throws ValidationError - 业务验证失败
+ * @throws NotFoundError - 请求或图片不存在
+ */
+export async function selectImageAndGenerateModel(requestId: string, selectedImageIndex: number) {
+	// 验证生成请求存在
+	const request = await getRequestById(requestId);
+
+	// 验证请求状态
+	if (request.phase !== 'IMAGE_GENERATION') {
+		throw new ValidationError('请求不在图片生成阶段,无法选择图片');
+	}
+
+	// 获取所有图片
+	const images = await generatedImageRepository.findByRequestId(requestId);
+	if (images.length === 0) {
+		throw new NotFoundError('未找到生成的图片');
+	}
+
+	// 验证选择的图片存在
+	const selectedImage = images.find((img) => img.index === selectedImageIndex);
+	if (!selectedImage) {
+		throw new NotFoundError(`图片索引 ${selectedImageIndex} 不存在`);
+	}
+
+	// 验证图片已完成
+	if (selectedImage.imageStatus !== 'COMPLETED' || !selectedImage.imageUrl) {
+		throw new ValidationError(`图片 ${selectedImageIndex} 尚未生成完成`);
+	}
+
+	// 更新 GenerationRequest 状态
+	await generationRequestRepository.update(requestId, {
+		selectedImageIndex,
+		phase: 'MODEL_GENERATION',
+		status: 'MODEL_PENDING',
+	});
+
+	// 创建 Model
+	const modelId = createId();
+	const model = await modelRepository.create({
+		id: modelId,
+		requestId,
+		userId: request.userId,
+		name: `模型-${requestId.substring(0, 8)}`,
+		previewImageUrl: selectedImage.imageUrl,
+		visibility: 'PRIVATE',
+	});
+
+	// 创建 ModelGenerationJob
+	const jobId = createId();
+	await modelJobRepository.create({
+		id: jobId,
+		modelId,
+		status: 'PENDING',
+		priority: 0,
+		retryCount: 0,
+		progress: 0,
+	});
+
+	// 加入模型生成队列
+	await modelQueue.add(`model-${modelId}`, {
+		jobId,
+		modelId,
+		imageUrl: selectedImage.imageUrl,
+		requestId,
+		userId: request.userId,
+	});
+
+	logger.info({
+		msg: '✅ 已选择图片并触发3D模型生成',
+		requestId,
+		selectedImageIndex,
+		modelId,
+		jobId,
+		imageUrl: selectedImage.imageUrl,
+	});
+
+	return {
+		model,
+		selectedImageIndex,
+	};
 }
 
 /**

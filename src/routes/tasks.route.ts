@@ -14,12 +14,12 @@ import type { FastifyInstance } from 'fastify';
 /**
  * 注册生成请求路由
  */
-export async function requestRoutes(fastify: FastifyInstance) {
+export async function taskRoutes(fastify: FastifyInstance) {
 	/**
-	 * GET /api/requests
+	 * GET /api/tasks
 	 * 获取用户的生成请求列表
 	 */
-	fastify.get('/api/requests', async (request, reply) => {
+	fastify.get('/api/tasks', async (request, reply) => {
 		try {
 			// 从认证中间件获取 userId (暂时使用测试 ID)
 			const userId = (request.headers['x-user-id'] as string) || 'test-user-id';
@@ -36,10 +36,10 @@ export async function requestRoutes(fastify: FastifyInstance) {
 	});
 
 	/**
-	 * GET /api/requests/:id
+	 * GET /api/tasks/:id
 	 * 获取生成请求详情
 	 */
-	fastify.get<{ Params: { id: string } }>('/api/requests/:id', async (request, reply) => {
+	fastify.get<{ Params: { id: string } }>('/api/tasks/:id', async (request, reply) => {
 		try {
 			const { id } = request.params;
 
@@ -58,7 +58,7 @@ export async function requestRoutes(fastify: FastifyInstance) {
 	});
 
 	/**
-	 * POST /api/requests
+	 * POST /api/tasks
 	 * 创建新的生成请求
 	 */
 	fastify.post<{
@@ -66,7 +66,7 @@ export async function requestRoutes(fastify: FastifyInstance) {
 			prompt: string;
 			optimizePrompt?: boolean;
 		};
-	}>('/api/requests', async (request, reply) => {
+	}>('/api/tasks', async (request, reply) => {
 		try {
 			const userId = (request.headers['x-user-id'] as string) || 'test-user-id';
 			const { prompt, optimizePrompt = true } = request.body;
@@ -123,10 +123,61 @@ export async function requestRoutes(fastify: FastifyInstance) {
 	});
 
 	/**
-	 * DELETE /api/requests/:id
+	 * PATCH /api/tasks/:id
+	 * 选择图片触发3D模型生成
+	 */
+	fastify.patch<{
+		Params: { id: string };
+		Body: { selectedImageIndex: number };
+	}>('/api/tasks/:id', async (request, reply) => {
+		try {
+			const { id } = request.params;
+			const { selectedImageIndex } = request.body;
+
+			// 验证参数
+			if (selectedImageIndex === undefined || selectedImageIndex < 0 || selectedImageIndex > 3) {
+				throw new ValidationError('selectedImageIndex 必须在 0-3 之间');
+			}
+
+			// 选择图片并触发3D生成
+			const result = await GenerationRequestService.selectImageAndGenerateModel(
+				id,
+				selectedImageIndex,
+			);
+
+			logger.info({
+				msg: '✅ 已选择图片并触发3D模型生成',
+				requestId: id,
+				selectedImageIndex,
+				modelId: result.model?.id,
+			});
+
+			return reply.send(
+				success({
+					model: result.model,
+					selectedImageIndex: result.selectedImageIndex,
+				}),
+			);
+		} catch (error) {
+			logger.error({ msg: '选择图片触发3D生成失败', error, requestId: request.params.id });
+
+			if (error instanceof ValidationError) {
+				return reply.status(400).send(fail(error.message));
+			}
+
+			if (error instanceof Error && error.message.includes('不存在')) {
+				return reply.status(404).send(fail(error.message));
+			}
+
+			return reply.status(500).send(fail('选择图片触发3D生成失败'));
+		}
+	});
+
+	/**
+	 * DELETE /api/tasks/:id
 	 * 删除生成请求
 	 */
-	fastify.delete<{ Params: { id: string } }>('/api/requests/:id', async (request, reply) => {
+	fastify.delete<{ Params: { id: string } }>('/api/tasks/:id', async (request, reply) => {
 		try {
 			const { id } = request.params;
 
