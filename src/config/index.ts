@@ -56,6 +56,15 @@ const envSchema = z.object({
 	MODEL_QUEUE_CONCURRENCY: z.string().default('1'),
 	QUEUE_JOB_TIMEOUT: z.string().default('600000'),
 	QUEUE_MAX_RETRIES: z.string().default('3'),
+
+	// 前端域名配置（CORS）
+	FRONTEND_URLS: z
+		.string()
+		.default('http://localhost:4100,http://192.168.88.100:4100')
+		.transform((val) => val.split(',').map(url => url.trim())),
+
+	// Cookie domain 配置（跨端口共享 Cookie）
+	COOKIE_DOMAIN: z.string().default('192.168.88.100'),
 });
 
 const parseResult = envSchema.safeParse(process.env);
@@ -138,5 +147,15 @@ export const config = {
 		modelConcurrency: Number.parseInt(env.MODEL_QUEUE_CONCURRENCY, 10),
 		jobTimeout: Number.parseInt(env.QUEUE_JOB_TIMEOUT, 10),
 		maxRetries: Number.parseInt(env.QUEUE_MAX_RETRIES, 10),
+	},
+
+	// CORS 配置
+	cors: {
+		origins: env.FRONTEND_URLS,
+	},
+
+	// Cookie 配置
+	cookie: {
+		domain: env.COOKIE_DOMAIN,
 	},
 } as const;

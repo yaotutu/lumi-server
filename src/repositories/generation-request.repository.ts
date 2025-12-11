@@ -1,6 +1,14 @@
 import { db } from '@/db/drizzle';
-import { type GenerationRequest, type NewGenerationRequest, generationRequests } from '@/db/schema';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import {
+	type GenerationRequest,
+	type NewGenerationRequest,
+	generatedImages,
+	generationRequests,
+	imageGenerationJobs,
+	modelGenerationJobs,
+	models,
+} from '@/db/schema';
+import { and, asc, desc, eq, sql } from 'drizzle-orm';
 
 /**
  * GenerationRequest Repository
@@ -21,19 +29,100 @@ export class GenerationRequestRepository {
 	}
 
 	/**
-	 * 根据 ID 查询请求
+	 * 根据 ID 查询请求（包含关联的 images 和 model）
+	 * 手动加载关联数据，确保与 Prisma 格式一致
 	 */
-	async findById(id: string): Promise<GenerationRequest | undefined> {
+	async findById(id: string) {
+		// 1. 查询主请求
 		const [request] = await db
 			.select()
 			.from(generationRequests)
 			.where(eq(generationRequests.id, id))
 			.limit(1);
-		return request;
+
+		if (!request) {
+			return undefined;
+		}
+
+		// 2. 查询关联的 images（带 generationJob）
+		const images = await db
+			.select({
+				id: generatedImages.id,
+				requestId: generatedImages.requestId,
+				index: generatedImages.index,
+				imageUrl: generatedImages.imageUrl,
+				imagePrompt: generatedImages.imagePrompt,
+				imageStatus: generatedImages.imageStatus,
+				createdAt: generatedImages.createdAt,
+				completedAt: generatedImages.completedAt,
+				failedAt: generatedImages.failedAt,
+				errorMessage: generatedImages.errorMessage,
+				// 嵌套的 generationJob
+				generationJob: {
+					id: imageGenerationJobs.id,
+					status: imageGenerationJobs.status,
+					retryCount: imageGenerationJobs.retryCount,
+				},
+			})
+			.from(generatedImages)
+			.leftJoin(imageGenerationJobs, eq(generatedImages.id, imageGenerationJobs.imageId))
+			.where(eq(generatedImages.requestId, id))
+			.orderBy(asc(generatedImages.index));
+
+
+		// 3. 查询关联的 model（带 generationJob）
+		const [modelRow] = await db
+			.select({
+				id: models.id,
+				userId: models.userId,
+				source: models.source,
+				requestId: models.requestId,
+				sourceImageId: models.sourceImageId,
+				name: models.name,
+				description: models.description,
+				modelUrl: models.modelUrl,
+				previewImageUrl: models.previewImageUrl,
+				format: models.format,
+				fileSize: models.fileSize,
+				visibility: models.visibility,
+				publishedAt: models.publishedAt,
+				viewCount: models.viewCount,
+				likeCount: models.likeCount,
+				favoriteCount: models.favoriteCount,
+				downloadCount: models.downloadCount,
+				sliceTaskId: models.sliceTaskId,
+				printStatus: models.printStatus,
+				createdAt: models.createdAt,
+				updatedAt: models.updatedAt,
+				completedAt: models.completedAt,
+				failedAt: models.failedAt,
+				errorMessage: models.errorMessage,
+				// 嵌套的 generationJob
+				generationJob: {
+					id: modelGenerationJobs.id,
+					status: modelGenerationJobs.status,
+					progress: modelGenerationJobs.progress,
+				},
+			})
+			.from(models)
+			.leftJoin(modelGenerationJobs, eq(models.id, modelGenerationJobs.modelId))
+			.where(eq(models.requestId, id))
+			.limit(1);
+
+		// 4. 组装返回数据（与 Prisma 格式一致）
+		const result = {
+			...request,
+			images,
+			model: modelRow || null,
+		};
+
+
+		return result;
 	}
 
 	/**
-	 * 根据用户 ID 查询请求列表（分页）
+	 * 根据用户 ID 查询请求列表（分页，包含关联数据）
+	 * 手动加载关联数据，确保与 Prisma 格式一致
 	 */
 	async findByUserId(
 		userId: string,
@@ -41,16 +130,90 @@ export class GenerationRequestRepository {
 			limit?: number;
 			offset?: number;
 		} = {},
-	): Promise<GenerationRequest[]> {
+	) {
 		const { limit = 20, offset = 0 } = options;
 
-		return db
+		// 1. 查询主请求列表
+		const requests = await db
 			.select()
 			.from(generationRequests)
 			.where(eq(generationRequests.userId, userId))
 			.orderBy(desc(generationRequests.createdAt))
 			.limit(limit)
 			.offset(offset);
+
+		if (requests.length === 0) {
+			return [];
+		}
+
+		const requestIds = requests.map((r) => r.id);
+
+		// 2. 批量查询所有请求的 images
+		const allImages = await db
+			.select({
+				id: generatedImages.id,
+				requestId: generatedImages.requestId,
+				index: generatedImages.index,
+				imageUrl: generatedImages.imageUrl,
+				imagePrompt: generatedImages.imagePrompt,
+				imageStatus: generatedImages.imageStatus,
+				createdAt: generatedImages.createdAt,
+				completedAt: generatedImages.completedAt,
+				failedAt: generatedImages.failedAt,
+				errorMessage: generatedImages.errorMessage,
+				// 嵌套的 generationJob
+				generationJob: {
+					id: imageGenerationJobs.id,
+					status: imageGenerationJobs.status,
+				},
+			})
+			.from(generatedImages)
+			.leftJoin(imageGenerationJobs, eq(generatedImages.id, imageGenerationJobs.imageId))
+			.where(sql`${generatedImages.requestId} IN (${sql.join(requestIds.map((id) => sql`${id}`), sql`, `)})`)
+			.orderBy(asc(generatedImages.index));
+
+		// 3. 批量查询所有请求的 models
+		const allModels = await db
+			.select({
+				id: models.id,
+				requestId: models.requestId,
+				modelUrl: models.modelUrl,
+				previewImageUrl: models.previewImageUrl,
+				format: models.format,
+				completedAt: models.completedAt,
+				// 嵌套的 generationJob
+				generationJob: {
+					id: modelGenerationJobs.id,
+					status: modelGenerationJobs.status,
+					progress: modelGenerationJobs.progress,
+				},
+			})
+			.from(models)
+			.leftJoin(modelGenerationJobs, eq(models.id, modelGenerationJobs.modelId))
+			.where(sql`${models.requestId} IN (${sql.join(requestIds.map((id) => sql`${id}`), sql`, `)})`);
+
+		// 4. 按 requestId 分组
+		const imagesMap = new Map<string, typeof allImages>();
+		for (const img of allImages) {
+			if (!imagesMap.has(img.requestId)) {
+				imagesMap.set(img.requestId, []);
+			}
+			imagesMap.get(img.requestId)!.push(img);
+		}
+
+		const modelsMap = new Map<string, (typeof allModels)[0]>();
+		for (const model of allModels) {
+			if (model.requestId) {
+				modelsMap.set(model.requestId, model);
+			}
+		}
+
+		// 5. 组装返回数据（与 Prisma 格式一致）
+		return requests.map((request) => ({
+			...request,
+			images: imagesMap.get(request.id) || [],
+			model: modelsMap.get(request.id) || null,
+		}));
 	}
 
 	/**

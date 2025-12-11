@@ -5,12 +5,14 @@
  * - 从 model-generation 队列消费任务
  * - 调用 3D 模型生成 Provider 生成模型
  * - 更新 Model 和 ModelGenerationJob 状态
+ * - 通过 SSE 实时推送状态更新
  * - 处理失败和重试逻辑
  */
 
 import { createModel3DProvider } from '@/providers/model3d';
 import type { ModelJobData } from '@/queues';
 import { modelJobRepository, modelRepository } from '@/repositories';
+import { sseConnectionManager } from '@/services/sse-connection-manager';
 import { logger } from '@/utils/logger';
 import { redisClient } from '@/utils/redis-client';
 import { type Job, Worker } from 'bullmq';
@@ -61,6 +63,20 @@ async function processModelJob(job: Job<ModelJobData>) {
 			providerName: modelProvider.getName(),
 		});
 
+		// ✅ SSE 推送: model:generating
+		await sseConnectionManager.broadcast(requestId, 'model:generating', {
+			modelId,
+			providerJobId,
+			imageUrl,
+		});
+
+		logger.info({
+			msg: '📡 SSE 推送: model:generating',
+			requestId,
+			modelId,
+			providerJobId,
+		});
+
 		// 轮询查询任务状态
 		let attempts = 0;
 		const maxAttempts = 60; // 最多轮询 60 次 (约 10 分钟)
@@ -86,6 +102,12 @@ async function processModelJob(job: Job<ModelJobData>) {
 			const progress = Math.min(10 + Math.floor((attempts / maxAttempts) * 80), 90);
 			await modelJobRepository.updateProgress(jobId, progress);
 
+			// ✅ SSE 推送: model:progress
+			await sseConnectionManager.broadcast(requestId, 'model:progress', {
+				modelId,
+				progress,
+			});
+
 			if (status.status === 'DONE') {
 				// 任务完成
 				const modelFile = status.resultFiles?.[0];
@@ -102,16 +124,32 @@ async function processModelJob(job: Job<ModelJobData>) {
 				});
 
 				// 更新 Model 记录
+				const completedAt = new Date();
 				await modelRepository.update(modelId, {
 					modelUrl: modelFile.url,
 					format: modelFile.type || 'OBJ',
-					completedAt: new Date(),
+					completedAt,
 				});
 
 				// 更新 Job 状态为 COMPLETED
 				await modelJobRepository.updateStatus(jobId, 'COMPLETED', {
 					progress: 100,
-					completedAt: new Date(),
+					completedAt,
+				});
+
+				// ✅ SSE 推送: model:completed
+				await sseConnectionManager.broadcast(requestId, 'model:completed', {
+					modelId,
+					modelUrl: modelFile.url,
+					format: modelFile.type || 'OBJ',
+					completedAt,
+				});
+
+				logger.info({
+					msg: '📡 SSE 推送: model:completed',
+					requestId,
+					modelId,
+					modelUrl: modelFile.url,
 				});
 
 				return { success: true, modelUrl: modelFile.url };
@@ -138,10 +176,25 @@ async function processModelJob(job: Job<ModelJobData>) {
 			attempt: job.attemptsMade + 1,
 		});
 
+		const errorMessage = error instanceof Error ? error.message : String(error);
+
 		// 更新 Model 记录
 		await modelRepository.update(modelId, {
 			failedAt: new Date(),
-			errorMessage: error instanceof Error ? error.message : String(error),
+			errorMessage,
+		});
+
+		// ✅ SSE 推送: model:failed
+		await sseConnectionManager.broadcast(requestId, 'model:failed', {
+			modelId,
+			errorMessage,
+		});
+
+		logger.info({
+			msg: '📡 SSE 推送: model:failed',
+			requestId,
+			modelId,
+			errorMessage,
 		});
 
 		// 更新 Job 状态

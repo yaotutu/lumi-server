@@ -8,6 +8,8 @@
  * - GET /api/auth/me - 获取当前用户信息
  */
 
+import { config } from '@/config/index.js';
+import { getMeSchema, logoutSchema, sendCodeSchema, verifyCodeSchema } from '@/schemas/auth.schema';
 import * as AuthService from '@/services/auth.service';
 import { ValidationError } from '@/utils/errors';
 import { logger } from '@/utils/logger';
@@ -16,8 +18,9 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 /**
  * Session Cookie 配置
+ * 注意：Cookie 名称必须与 Next.js 保持一致
  */
-const COOKIE_NAME = 'session';
+const COOKIE_NAME = 'auth-session';
 const COOKIE_MAX_AGE = 30 * 24 * 60 * 60; // 30天(秒)
 
 /**
@@ -44,7 +47,7 @@ export async function authRoutes(fastify: FastifyInstance) {
 
 			return reply.send(
 				success({
-					message: '验证码已发送',
+					message: '验证码已发送，请查收（开发环境请使用 0000）',
 					// 开发环境返回验证码
 					...(result.code && { code: result.code }),
 				}),
@@ -56,7 +59,7 @@ export async function authRoutes(fastify: FastifyInstance) {
 				return reply.status(400).send(fail(error.message));
 			}
 
-			return reply.status(500).send(fail('发送验证码失败'));
+			return reply.code(500).send(fail('发送验证码失败'));
 		}
 	});
 
@@ -86,12 +89,19 @@ export async function authRoutes(fastify: FastifyInstance) {
 			const user = await AuthService.verifyCodeAndLogin(email.trim().toLowerCase(), code.trim());
 
 			// 设置 Cookie (HTTP-only, Secure in production)
-			reply.setCookie(COOKIE_NAME, user.id, {
+			// Cookie 值为 JSON 字符串，包含 userId 和 email
+			const sessionData = JSON.stringify({
+				userId: user.id,
+				email: user.email,
+			});
+
+			reply.setCookie(COOKIE_NAME, sessionData, {
 				httpOnly: true,
 				secure: process.env.NODE_ENV === 'production',
 				sameSite: 'lax',
 				maxAge: COOKIE_MAX_AGE,
 				path: '/',
+			domain: config.cookie.domain, // ✅ 跨端口共享 Cookie
 			});
 
 			return reply.send(
@@ -112,7 +122,7 @@ export async function authRoutes(fastify: FastifyInstance) {
 				return reply.status(400).send(fail(error.message));
 			}
 
-			return reply.status(500).send(fail('登录失败'));
+			return reply.code(500).send(fail('登录失败'));
 		}
 	});
 
@@ -120,48 +130,86 @@ export async function authRoutes(fastify: FastifyInstance) {
 	 * POST /api/auth/logout
 	 * 登出
 	 */
-	fastify.post('/api/auth/logout', async (_request, reply) => {
+	fastify.post('/api/auth/logout', { schema: logoutSchema }, async (_request, reply) => {
 		try {
 			// 清除 Cookie
 			reply.clearCookie(COOKIE_NAME, {
 				path: '/',
+				domain: config.cookie.domain,
 			});
 
 			return reply.send(success({ message: '登出成功' }));
 		} catch (error) {
 			logger.error({ msg: '登出失败', error });
-			return reply.status(500).send(fail('登出失败'));
+			return (reply as any).code(500).send(fail('登出失败'));
 		}
 	});
 
 	/**
 	 * GET /api/auth/me
 	 * 获取当前用户信息
+	 *
+	 * Next.js 响应格式：
+	 * {
+	 *   "status": "success",
+	 *   "data": {
+	 *     "status": "authenticated" | "unauthenticated" | "expired" | "error",
+	 *     "user": User | null
+	 *   }
+	 * }
 	 */
-	fastify.get('/api/auth/me', async (request, reply) => {
+	fastify.get('/api/auth/me', { schema: getMeSchema }, async (request, reply) => {
 		try {
-			// 从 Cookie 获取 userId
-			const userId = request.cookies[COOKIE_NAME];
+			// 从 Cookie 获取会话数据
+			const sessionCookie = request.cookies[COOKIE_NAME];
 
-			if (!userId) {
+			if (!sessionCookie) {
 				return reply.send(
 					success({
-						authenticated: false,
+						status: 'unauthenticated',
+						user: null,
+					}),
+				);
+			}
+
+			// 解析 JSON 格式的会话数据
+			let userSession: { userId: string; email: string };
+			try {
+				userSession = JSON.parse(sessionCookie);
+			} catch (error) {
+				// JSON 解析失败，清除无效 Cookie
+				reply.clearCookie(COOKIE_NAME, { path: '/', domain: config.cookie.domain });
+				logger.warn({ msg: 'Cookie JSON 解析失败', error });
+				return reply.send(
+					success({
+						status: 'error',
+						user: null,
+					}),
+				);
+			}
+
+			// 验证会话数据格式
+			if (!userSession.userId || !userSession.email) {
+				reply.clearCookie(COOKIE_NAME, { path: '/', domain: config.cookie.domain });
+				logger.warn({ msg: 'Cookie 数据格式无效', userSession });
+				return reply.send(
+					success({
+						status: 'error',
 						user: null,
 					}),
 				);
 			}
 
 			// 查询用户信息
-			const user = await AuthService.getUserById(userId);
+			const user = await AuthService.getUserById(userSession.userId);
 
 			if (!user) {
 				// Cookie 中的用户ID无效,清除 Cookie
-				reply.clearCookie(COOKIE_NAME, { path: '/' });
+				reply.clearCookie(COOKIE_NAME, { path: '/', domain: config.cookie.domain });
 
 				return reply.send(
 					success({
-						authenticated: false,
+						status: 'expired',
 						user: null,
 					}),
 				);
@@ -169,7 +217,7 @@ export async function authRoutes(fastify: FastifyInstance) {
 
 			return reply.send(
 				success({
-					authenticated: true,
+					status: 'authenticated',
 					user: {
 						id: user.id,
 						email: user.email,
@@ -180,7 +228,12 @@ export async function authRoutes(fastify: FastifyInstance) {
 			);
 		} catch (error) {
 			logger.error({ msg: '获取用户信息失败', error });
-			return reply.status(500).send(fail('获取用户信息失败'));
+			return reply.send(
+				success({
+					status: 'error',
+					user: null,
+				}),
+			);
 		}
 	});
 }

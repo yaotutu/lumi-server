@@ -3,6 +3,8 @@ import { config } from './config/index.js';
 import { closeDatabase, testConnection } from './db/drizzle.js';
 import { logger } from './utils/logger.js';
 import { redisClient } from './utils/redis-client.js';
+import { createImageWorker } from './workers/image.worker.js';
+import { createModelWorker } from './workers/model.worker.js';
 
 async function start() {
 	try {
@@ -17,6 +19,11 @@ async function start() {
 		if (!redisConnected) {
 			throw new Error('Redis connection failed');
 		}
+
+		// 启动 Workers (在应用启动之前)
+		logger.info('🚀 启动 BullMQ Workers...');
+		const imageWorker = createImageWorker();
+		const modelWorker = createModelWorker();
 
 		// 构建应用
 		const app = await buildApp();
@@ -43,6 +50,11 @@ async function start() {
 				logger.info(`Received ${signal}, shutting down gracefully...`);
 
 				try {
+					// 关闭 Workers
+					await imageWorker.close();
+					await modelWorker.close();
+					logger.info('Workers closed successfully');
+
 					await app.close();
 					await redisClient.disconnect();
 					await closeDatabase();
@@ -55,7 +67,8 @@ async function start() {
 			});
 		}
 	} catch (error) {
-		logger.error({ error }, 'Failed to start server');
+		logger.error({ error, msg: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined }, 'Failed to start server');
+		console.error('Server startup error:', error);
 		process.exit(1);
 	}
 }

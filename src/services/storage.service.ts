@@ -146,6 +146,32 @@ class StorageService {
 		const ext = filename.split('.').pop();
 		return `${prefix}/${timestamp}-${randomStr}.${ext}`;
 	}
+
+	/**
+	 * 生成缩略图名称
+	 * 在原文件名基础上添加 _thumb 后缀，避免重复添加
+	 * @param key - 原始文件key
+	 * @returns 带有 _thumb 后缀的文件key
+	 */
+	generateThumbnailName(key: string): string {
+		const THUMBNAIL_SUFFIX = '_thumb';
+
+		// 如果已经包含缩略图后缀，避免重复添加
+		if (key.includes(`${THUMBNAIL_SUFFIX}.`)) {
+			return key;
+		}
+
+		// 使用正则表达式匹配文件名和扩展名
+		const match = key.match(/^(.*)(\.[^.]+)$/);
+
+		if (match) {
+			// 有扩展名的文件：在扩展名前插入后缀
+			const [, nameWithoutExt, extension] = match;
+			return `${nameWithoutExt}${THUMBNAIL_SUFFIX}${extension}`;
+		}
+		// 没有扩展名的文件：直接在末尾添加后缀
+		return `${key}${THUMBNAIL_SUFFIX}`;
+	}
 }
 
 // 单例模式

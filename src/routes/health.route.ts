@@ -4,6 +4,7 @@
  */
 
 import { db } from '@/db/drizzle';
+import { createSuccessResponseSchema } from '@/schemas/common.schema';
 import { logger } from '@/utils/logger';
 import { redisClient } from '@/utils/redis-client';
 import { fail, success } from '@/utils/response';
@@ -18,14 +19,41 @@ export async function healthRoutes(fastify: FastifyInstance) {
 	 * GET /health
 	 * 基础健康检查
 	 */
-	fastify.get('/health', async (_request, reply) => {
-		return reply.send(
-			success({
-				status: 'ok',
-				timestamp: new Date().toISOString(),
-			}),
-		);
-	});
+	fastify.get(
+		'/health',
+		{
+			schema: {
+				tags: ['健康检查'],
+				summary: '基础健康检查',
+				description: '快速检查服务器是否正常运行',
+				response: {
+					200: createSuccessResponseSchema({
+						type: 'object',
+						properties: {
+							status: {
+								type: 'string',
+								enum: ['ok'],
+								description: '服务状态',
+							},
+							timestamp: {
+								type: 'string',
+								format: 'date-time',
+								description: '检查时间',
+							},
+						},
+					}),
+				},
+			},
+		},
+		async (_request, reply) => {
+			return reply.send(
+				success({
+					status: 'ok',
+					timestamp: new Date().toISOString(),
+				}),
+			);
+		},
+	);
 
 	/**
 	 * GET /health/detailed
