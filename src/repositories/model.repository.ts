@@ -1,5 +1,13 @@
 import { db } from '@/db/drizzle';
-import { type Model, type NewModel, models, users } from '@/db/schema';
+import {
+	type Model,
+	type NewModel,
+	generatedImages,
+	generationRequests,
+	modelGenerationJobs,
+	models,
+	users,
+} from '@/db/schema';
 import { transformToProxyUrl } from '@/utils/url-transformer';
 import { and, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 
@@ -22,10 +30,93 @@ export class ModelRepository {
 
 	/**
 	 * 根据 ID 查询模型
+	 * 返回包含用户信息、请求信息、源图片信息和生成任务信息的模型数据
+	 * URL 已转换为代理 URL，前端可直接使用
 	 */
-	async findById(id: string): Promise<Model | undefined> {
-		const [model] = await db.select().from(models).where(eq(models.id, id)).limit(1);
-		return model;
+	async findById(id: string): Promise<any> {
+		const [result] = await db
+			.select({
+				id: models.id,
+				name: models.name,
+				description: models.description,
+				previewImageUrl: models.previewImageUrl,
+				modelUrl: models.modelUrl,
+				mtlUrl: models.mtlUrl, // ✅ OBJ 格式专用：MTL 材质文件 URL
+				textureUrl: models.textureUrl, // ✅ OBJ 格式专用：纹理图片 URL
+				format: models.format,
+				visibility: models.visibility,
+				likeCount: models.likeCount,
+				favoriteCount: models.favoriteCount,
+				viewCount: models.viewCount,
+				downloadCount: models.downloadCount,
+				userId: models.userId,
+				requestId: models.requestId,
+				sourceImageId: models.sourceImageId,
+				publishedAt: models.publishedAt,
+				completedAt: models.completedAt,
+				createdAt: models.createdAt,
+				updatedAt: models.updatedAt,
+				failedAt: models.failedAt,
+				errorMessage: models.errorMessage,
+				source: models.source,
+				fileSize: models.fileSize,
+				sliceTaskId: models.sliceTaskId,
+				printStatus: models.printStatus,
+				// 关联 user 信息
+				user: {
+					id: users.id,
+					name: users.name,
+					email: users.email,
+					avatar: users.avatar,
+				},
+				// 关联 request 信息
+				request: {
+					id: generationRequests.id,
+					prompt: generationRequests.prompt,
+					status: generationRequests.status,
+					phase: generationRequests.phase,
+				},
+				// 关联 sourceImage 信息
+				sourceImage: {
+					id: generatedImages.id,
+					imageUrl: generatedImages.imageUrl,
+					index: generatedImages.index,
+					imagePrompt: generatedImages.imagePrompt,
+				},
+				// 关联 generationJob 信息
+				generationJob: {
+					id: modelGenerationJobs.id,
+					status: modelGenerationJobs.status,
+					progress: modelGenerationJobs.progress,
+					retryCount: modelGenerationJobs.retryCount,
+					providerJobId: modelGenerationJobs.providerJobId,
+				},
+			})
+			.from(models)
+			.leftJoin(users, eq(models.userId, users.id))
+			.leftJoin(generationRequests, eq(models.requestId, generationRequests.id))
+			.leftJoin(generatedImages, eq(models.sourceImageId, generatedImages.id))
+			.leftJoin(modelGenerationJobs, eq(models.id, modelGenerationJobs.modelId))
+			.where(eq(models.id, id))
+			.limit(1);
+
+		if (!result) return undefined;
+
+		// 转换 URL 为代理 URL（解决跨域问题，前端可直接使用）
+		return {
+			...result,
+			previewImageUrl: transformToProxyUrl(result.previewImageUrl, 'image'),
+			modelUrl: transformToProxyUrl(result.modelUrl, 'model'),
+			mtlUrl: transformToProxyUrl(result.mtlUrl, 'model'), // ✅ 转换 MTL 文件 URL
+			textureUrl: transformToProxyUrl(result.textureUrl, 'model'), // ✅ 转换纹理图片 URL
+			// 转换 sourceImage 中的 imageUrl
+			sourceImage: result.sourceImage
+				? {
+						...result.sourceImage,
+						imageUrl: transformToProxyUrl(result.sourceImage.imageUrl, 'image'),
+					}
+				: null,
+		};
 	}
 
 	/**

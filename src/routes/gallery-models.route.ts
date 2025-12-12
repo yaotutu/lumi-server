@@ -42,13 +42,18 @@ export async function galleryModelRoutes(fastify: FastifyInstance) {
 
 	/**
 	 * GET /api/gallery/models/:id
-	 * 获取模型详情
+	 * 获取模型详情（自动增加浏览计数）
 	 */
 	fastify.get<{ Params: { id: string } }>('/api/gallery/models/:id', async (request, reply) => {
 		try {
 			const { id } = request.params;
 
 			const model = await ModelService.getModelById(id);
+
+			// 异步增加浏览计数（不阻塞响应）
+			ModelService.incrementViewCount(id).catch((error) => {
+				logger.error({ msg: '增加浏览计数失败', error, modelId: id });
+			});
 
 			return reply.send(success(model));
 		} catch (error) {
