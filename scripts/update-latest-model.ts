@@ -1,9 +1,9 @@
+import { eq } from 'drizzle-orm';
 /**
  * 更新最新的 PRIVATE 模型为 PUBLIC
  */
 import { db } from '../src/db/drizzle.js';
 import { models } from '../src/db/schema/index.js';
-import { eq } from 'drizzle-orm';
 
 async function updateLatestModel() {
 	// 最新的 PRIVATE 模型 ID

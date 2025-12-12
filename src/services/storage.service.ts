@@ -231,10 +231,7 @@ class StorageService {
 			const arrayBuffer = await response.arrayBuffer();
 			const buffer = Buffer.from(arrayBuffer);
 
-			logger.info(
-				{ size: buffer.length, requestId, index },
-				'✅ 图片下载成功，准备上传到 S3',
-			);
+			logger.info({ size: buffer.length, requestId, index }, '✅ 图片下载成功，准备上传到 S3');
 
 			// 2. 生成 S3 key（使用 PNG 格式）
 			const key = `images/${requestId}/${index}.png`;

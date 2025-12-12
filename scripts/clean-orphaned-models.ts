@@ -1,6 +1,6 @@
+import { sql } from 'drizzle-orm';
 import { db } from '../src/db/drizzle.js';
 import { models } from '../src/db/schema/index.js';
-import { sql } from 'drizzle-orm';
 import { logger } from '../src/utils/logger.js';
 
 /**

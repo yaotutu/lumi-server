@@ -79,6 +79,8 @@ const modelSchema = {
 		id: { type: 'string', description: '模型 ID' },
 		requestId: { type: 'string', description: '关联的任务 ID' },
 		modelUrl: { type: ['string', 'null'], description: '模型文件 URL' },
+		mtlUrl: { type: ['string', 'null'], description: 'MTL 材质文件 URL (仅 OBJ 格式)' },
+		textureUrl: { type: ['string', 'null'], description: '纹理图片 URL (仅 OBJ 格式)' },
 		previewImageUrl: { type: ['string', 'null'], description: '预览图 URL' },
 		format: { type: ['string', 'null'], description: '模型格式' },
 		completedAt: { type: ['string', 'null'], format: 'date-time', description: '完成时间' },

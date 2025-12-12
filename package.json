@@ -20,13 +20,7 @@
 		"format": "biome format --write .",
 		"check": "biome check --write . && tsc --noEmit"
 	},
-	"keywords": [
-		"fastify",
-		"drizzle",
-		"redis",
-		"bullmq",
-		"s3"
-	],
+	"keywords": ["fastify", "drizzle", "redis", "bullmq", "s3"],
 	"author": "",
 	"license": "MIT",
 	"dependencies": {

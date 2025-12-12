@@ -12,11 +12,16 @@
 
 import { createImageProvider } from '@/providers/image';
 import type { ImageJobData } from '@/queues';
-import { generatedImageRepository, imageJobRepository, generationRequestRepository } from '@/repositories';
+import {
+	generatedImageRepository,
+	generationRequestRepository,
+	imageJobRepository,
+} from '@/repositories';
 import { sseConnectionManager } from '@/services/sse-connection-manager';
 import { storageService } from '@/services/storage.service';
 import { logger } from '@/utils/logger';
 import { redisClient } from '@/utils/redis-client';
+import { transformToProxyUrl } from '@/utils/url-transformer';
 import { type Job, Worker } from 'bullmq';
 
 /**
@@ -147,11 +152,11 @@ async function processImageJob(job: Job<ImageJobData>) {
 			completedAt,
 		});
 
-		// ✅ SSE 推送: image:completed（推送 S3 URL）
+		// ✅ SSE 推送: image:completed（推送代理 URL，前端可直接使用）
 		await sseConnectionManager.broadcast(requestId, 'image:completed', {
 			imageId,
 			index: imageIndex,
-			imageUrl: s3ImageUrl, // ✅ 推送 S3 URL
+			imageUrl: transformToProxyUrl(s3ImageUrl, 'image'), // ✅ 转换为代理 URL
 			completedAt,
 		});
 

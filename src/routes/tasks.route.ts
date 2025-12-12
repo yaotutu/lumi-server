@@ -19,9 +19,9 @@ import * as PromptOptimizerService from '@/services/prompt-optimizer.service';
 import { sseConnectionManager } from '@/services/sse-connection-manager';
 import { ValidationError } from '@/utils/errors';
 import { logger } from '@/utils/logger';
+import { getUserIdFromRequest } from '@/utils/request-auth';
 import { fail, success } from '@/utils/response';
 import { adaptGenerationRequest } from '@/utils/task-adapter';
-import { getUserIdFromRequest } from '@/utils/request-auth';
 import type { FastifyInstance } from 'fastify';
 
 /**
@@ -213,99 +213,111 @@ export async function taskRoutes(fastify: FastifyInstance) {
 	 * DELETE /api/tasks/:id
 	 * 删除生成请求
 	 */
-	fastify.delete<{ Params: { id: string } }>('/api/tasks/:id', { schema: deleteTaskSchema }, async (request, reply) => {
-		try {
-			const { id } = request.params;
+	fastify.delete<{ Params: { id: string } }>(
+		'/api/tasks/:id',
+		{ schema: deleteTaskSchema },
+		async (request, reply) => {
+			try {
+				const { id } = request.params;
 
-			await GenerationRequestService.deleteRequest(id);
+				await GenerationRequestService.deleteRequest(id);
 
-			logger.info({ msg: '✅ 生成请求删除成功', requestId: id });
+				logger.info({ msg: '✅ 生成请求删除成功', requestId: id });
 
-			return reply.send(success({ message: '生成请求已删除' }));
-		} catch (error) {
-			logger.error({ msg: '删除生成请求失败', error, requestId: request.params.id });
+				return reply.send(success({ message: '生成请求已删除' }));
+			} catch (error) {
+				logger.error({ msg: '删除生成请求失败', error, requestId: request.params.id });
 
-			if (error instanceof Error && error.message.includes('不存在')) {
-				return reply.status(404).send(fail(error.message));
+				if (error instanceof Error && error.message.includes('不存在')) {
+					return reply.status(404).send(fail(error.message));
+				}
+
+				if (error instanceof Error && error.message.includes('无权限')) {
+					return reply.status(403).send(fail(error.message));
+				}
+
+				return reply.code(500).send(fail('删除生成请求失败'));
 			}
-
-			if (error instanceof Error && error.message.includes('无权限')) {
-				return reply.status(403).send(fail(error.message));
-			}
-
-			return reply.code(500).send(fail('删除生成请求失败'));
-		}
-	});
+		},
+	);
 
 	/**
 	 * POST /api/tasks/:id/print
 	 * 提交打印任务
 	 */
-	fastify.post<{ Params: { id: string } }>('/api/tasks/:id/print', { schema: submitPrintSchema }, async (request, reply) => {
-		try {
-			const { id } = request.params;
-			const userId = getUserIdFromRequest(request);
+	fastify.post<{ Params: { id: string } }>(
+		'/api/tasks/:id/print',
+		{ schema: submitPrintSchema },
+		async (request, reply) => {
+			try {
+				const { id } = request.params;
+				const userId = getUserIdFromRequest(request);
 
-			// 提交打印任务
-			const result = await GenerationRequestService.submitPrintTask(id, userId);
+				// 提交打印任务
+				const result = await GenerationRequestService.submitPrintTask(id, userId);
 
-			logger.info({
-				msg: '✅ 打印任务提交成功',
-				requestId: id,
-				modelId: result.modelId,
-				sliceTaskId: result.sliceTaskId,
-			});
-
-			return reply.send(
-				success({
+				logger.info({
+					msg: '✅ 打印任务提交成功',
+					requestId: id,
+					modelId: result.modelId,
 					sliceTaskId: result.sliceTaskId,
-					printResult: result.printResult,
-					message: '打印任务已提交',
-				}),
-			);
-		} catch (error) {
-			logger.error({ msg: '提交打印任务失败', error, requestId: request.params.id });
+				});
 
-			if (error instanceof ValidationError) {
-				return reply.status(400).send(fail(error.message));
+				return reply.send(
+					success({
+						sliceTaskId: result.sliceTaskId,
+						printResult: result.printResult,
+						message: '打印任务已提交',
+					}),
+				);
+			} catch (error) {
+				logger.error({ msg: '提交打印任务失败', error, requestId: request.params.id });
+
+				if (error instanceof ValidationError) {
+					return reply.status(400).send(fail(error.message));
+				}
+
+				if (error instanceof Error && error.message.includes('不存在')) {
+					return reply.status(404).send(fail(error.message));
+				}
+
+				return reply.code(500).send(fail('提交打印任务失败'));
 			}
-
-			if (error instanceof Error && error.message.includes('不存在')) {
-				return reply.status(404).send(fail(error.message));
-			}
-
-			return reply.code(500).send(fail('提交打印任务失败'));
-		}
-	});
+		},
+	);
 
 	/**
 	 * GET /api/tasks/:id/print-status
 	 * 查询打印状态
 	 */
-	fastify.get<{ Params: { id: string } }>('/api/tasks/:id/print-status', { schema: getPrintStatusSchema }, async (request, reply) => {
-		try {
-			const { id } = request.params;
+	fastify.get<{ Params: { id: string } }>(
+		'/api/tasks/:id/print-status',
+		{ schema: getPrintStatusSchema },
+		async (request, reply) => {
+			try {
+				const { id } = request.params;
 
-			// 查询打印状态
-			const result = await GenerationRequestService.getPrintStatus(id);
+				// 查询打印状态
+				const result = await GenerationRequestService.getPrintStatus(id);
 
-			return reply.send(
-				success({
-					printStatus: result.printStatus,
-					sliceTaskId: result.sliceTaskId,
-					progress: result.progress,
-				}),
-			);
-		} catch (error) {
-			logger.error({ msg: '查询打印状态失败', error, requestId: request.params.id });
+				return reply.send(
+					success({
+						printStatus: result.printStatus,
+						sliceTaskId: result.sliceTaskId,
+						progress: result.progress,
+					}),
+				);
+			} catch (error) {
+				logger.error({ msg: '查询打印状态失败', error, requestId: request.params.id });
 
-			if (error instanceof Error && error.message.includes('不存在')) {
-				return reply.status(404).send(fail(error.message));
+				if (error instanceof Error && error.message.includes('不存在')) {
+					return reply.status(404).send(fail(error.message));
+				}
+
+				return reply.code(500).send(fail('查询打印状态失败'));
 			}
-
-			return reply.code(500).send(fail('查询打印状态失败'));
-		}
-	});
+		},
+	);
 
 	/**
 	 * GET /api/tasks/:id/events
@@ -339,7 +351,7 @@ export async function taskRoutes(fastify: FastifyInstance) {
 		reply.raw.writeHead(200, {
 			'Content-Type': 'text/event-stream',
 			'Cache-Control': 'no-cache, no-transform',
-			'Connection': 'keep-alive',
+			Connection: 'keep-alive',
 			'X-Accel-Buffering': 'no', // 禁用 Nginx 缓冲
 			// ✅ CORS 头 (SSE 必须手动添加)
 			'Access-Control-Allow-Origin': allowedOrigin,
@@ -378,7 +390,9 @@ export async function taskRoutes(fastify: FastifyInstance) {
 			} catch (error) {
 				logger.error({ msg: '查询任务详情失败', error, taskId });
 				// 发送错误事件
-				reply.raw.write(`event: error\ndata: ${JSON.stringify({ message: '任务不存在或已删除' })}\n\n`);
+				reply.raw.write(
+					`event: error\ndata: ${JSON.stringify({ message: '任务不存在或已删除' })}\n\n`,
+				);
 				// 关闭连接
 				reply.raw.end();
 				sseConnectionManager.removeConnection(connection);

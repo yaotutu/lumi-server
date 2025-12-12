@@ -1,9 +1,9 @@
+import { desc } from 'drizzle-orm';
 /**
  * 检查最新生成的图片URL
  */
 import { db } from '../src/db/drizzle.js';
 import { generatedImages } from '../src/db/schema/index.js';
-import { desc } from 'drizzle-orm';
 
 async function checkLatestImages() {
 	console.log('🔍 查询最新的5张图片...\n');

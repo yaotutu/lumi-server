@@ -1,19 +1,16 @@
+import { eq } from 'drizzle-orm';
 /**
  * 详细检查最新模型的状态
  */
 import { db } from '../src/db/drizzle.js';
 import { models } from '../src/db/schema/index.js';
-import { eq } from 'drizzle-orm';
 
 async function checkModelDetails() {
 	const modelId = 'yyjda823lubtv49pjzk5pvph';
 
 	console.log('🔍 检查模型详细信息...\n');
 
-	const model = await db
-		.select()
-		.from(models)
-		.where(eq(models.id, modelId));
+	const model = await db.select().from(models).where(eq(models.id, modelId));
 
 	if (model.length === 0) {
 		console.log('❌ 模型不存在');
@@ -39,7 +36,9 @@ async function checkModelDetails() {
 	const passesFilters =
 		m.visibility === 'PUBLIC' && m.completedAt !== null && m.publishedAt !== null;
 
-	console.log(`\n${passesFilters ? '✅' : '❌'} 总结: ${passesFilters ? '符合' : '不符合'}模型广场显示条件`);
+	console.log(
+		`\n${passesFilters ? '✅' : '❌'} 总结: ${passesFilters ? '符合' : '不符合'}模型广场显示条件`,
+	);
 
 	process.exit(0);
 }

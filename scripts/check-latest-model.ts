@@ -4,7 +4,7 @@
  */
 
 import { db } from '@/db/drizzle';
-import { generationRequests, models, modelGenerationJobs } from '@/db/schema';
+import { generationRequests, modelGenerationJobs, models } from '@/db/schema';
 import { desc, eq } from 'drizzle-orm';
 
 async function checkLatestModel() {

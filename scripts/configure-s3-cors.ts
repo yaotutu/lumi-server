@@ -25,12 +25,7 @@ async function configureS3Cors() {
 				AllowedOrigins: ['*'],
 				AllowedMethods: ['GET', 'HEAD'],
 				AllowedHeaders: ['*'],
-				ExposeHeaders: [
-					'ETag',
-					'Content-Type',
-					'Content-Length',
-					'Last-Modified',
-				],
+				ExposeHeaders: ['ETag', 'Content-Type', 'Content-Length', 'Last-Modified'],
 				MaxAgeSeconds: 3600, // 预检请求缓存1小时
 			},
 		],

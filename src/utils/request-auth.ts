@@ -31,18 +31,16 @@ import type { FastifyRequest } from 'fastify';
  * @throws Error 如果请求头中没有 x-user-id（不应该发生，说明配置错误）
  */
 export function getUserIdFromRequest(request: FastifyRequest): string {
-  const userId = request.headers['x-user-id'] as string;
+	const userId = request.headers['x-user-id'] as string;
 
-  if (!userId) {
-    // 这种情况不应该发生，说明：
-    // 1. 在未受保护的 API 中调用了此函数
-    // 2. Middleware 配置错误
-    throw new Error(
-      'x-user-id header not found. This API must be protected by middleware.',
-    );
-  }
+	if (!userId) {
+		// 这种情况不应该发生，说明：
+		// 1. 在未受保护的 API 中调用了此函数
+		// 2. Middleware 配置错误
+		throw new Error('x-user-id header not found. This API must be protected by middleware.');
+	}
 
-  return userId;
+	return userId;
 }
 
 /**
@@ -52,8 +50,8 @@ export function getUserIdFromRequest(request: FastifyRequest): string {
  * @returns 用户邮箱，如果不存在返回 null
  */
 export function getUserEmailFromRequest(request: FastifyRequest): string | null {
-  const email = request.headers['x-user-email'] as string | undefined;
-  return email || null;
+	const email = request.headers['x-user-email'] as string | undefined;
+	return email || null;
 }
 
 /**
@@ -63,11 +61,11 @@ export function getUserEmailFromRequest(request: FastifyRequest): string | null 
  * @returns { userId: string, email: string | null }
  */
 export function getUserFromRequest(request: FastifyRequest): {
-  userId: string;
-  email: string | null;
+	userId: string;
+	email: string | null;
 } {
-  return {
-    userId: getUserIdFromRequest(request),
-    email: getUserEmailFromRequest(request),
-  };
+	return {
+		userId: getUserIdFromRequest(request),
+		email: getUserEmailFromRequest(request),
+	};
 }

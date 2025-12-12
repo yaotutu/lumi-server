@@ -8,9 +8,9 @@
  * - 返回可访问的 S3 URL
  */
 
-import AdmZip from 'adm-zip';
 import { storageService } from '@/services/storage.service.js';
 import { logger } from '@/utils/logger.js';
+import AdmZip from 'adm-zip';
 
 /**
  * 从远程 URL 下载 3D 模型并上传到存储服务
@@ -18,7 +18,7 @@ import { logger } from '@/utils/logger.js';
  * @param remoteUrl 腾讯云返回的模型 URL（可能是 ZIP 文件）
  * @param modelId 模型 ID（用于存储路径）
  * @param format 模型格式（'glb' 或 'obj'）
- * @returns 存储后的 S3 URL（主模型文件的 URL）
+ * @returns 存储后的 S3 URL（包含主模型文件 URL 以及可选的 MTL 和纹理 URL）
  *
  * @throws 如果下载或上传失败
  */
@@ -26,7 +26,7 @@ export async function downloadAndUploadModel(
 	remoteUrl: string,
 	modelId: string,
 	format = 'glb',
-): Promise<string> {
+): Promise<{ objUrl: string; mtlUrl: string | null; textureUrl: string | null }> {
 	logger.info({
 		msg: '📥 开始下载并上传 3D 模型',
 		modelId,
@@ -64,10 +64,11 @@ export async function downloadAndUploadModel(
 			sizeMB: (modelBuffer.length / 1024 / 1024).toFixed(2),
 		});
 
-		// 2. 检查是否是 ZIP 文件（OBJ 格式通常是 ZIP 压缩包）
+		// 2. 检查是否是 ZIP 文件
 		const isZip = modelBuffer[0] === 0x50 && modelBuffer[1] === 0x4b; // "PK" 魔数
 
 		if (format === 'obj' && isZip) {
+			// OBJ 格式 + ZIP 压缩包：解压并处理
 			logger.info({
 				msg: '📦 检测到 OBJ ZIP 压缩包，开始解压',
 				modelId,
@@ -75,7 +76,17 @@ export async function downloadAndUploadModel(
 			return await handleObjZipArchive(modelId, modelBuffer);
 		}
 
-		// 3. 非 ZIP 文件，直接上传（GLB 等二进制格式）
+		if (format === 'obj' && !isZip) {
+			// OBJ 格式 + 非 ZIP：腾讯云在同目录下存储了 MTL 和纹理文件
+			logger.info({
+				msg: '📁 检测到非 ZIP 的 OBJ 文件，尝试下载同目录的 MTL 和纹理文件',
+				modelId,
+				remoteUrl,
+			});
+			return await handleObjSeparateFiles(remoteUrl, modelId, modelBuffer);
+		}
+
+		// 3. 其他格式（GLB 等），直接上传
 		logger.info({
 			msg: '⬆️ 正在上传到存储服务',
 			modelId,
@@ -89,7 +100,12 @@ export async function downloadAndUploadModel(
 			storageUrl,
 		});
 
-		return storageUrl;
+		// GLB 等非 OBJ 格式：只有主模型文件 URL
+		return {
+			objUrl: storageUrl,
+			mtlUrl: null,
+			textureUrl: null,
+		};
 	} catch (error) {
 		logger.error({
 			msg: '❌ 下载或上传模型失败',
@@ -107,9 +123,12 @@ export async function downloadAndUploadModel(
  *
  * @param modelId 模型 ID（用于存储路径）
  * @param zipBuffer ZIP 文件的 Buffer
- * @returns OBJ 文件的存储 URL
+ * @returns 包含所有模型文件 URL 的对象
  */
-async function handleObjZipArchive(modelId: string, zipBuffer: Buffer): Promise<string> {
+async function handleObjZipArchive(
+	modelId: string,
+	zipBuffer: Buffer,
+): Promise<{ objUrl: string; mtlUrl: string | null; textureUrl: string | null }> {
 	try {
 		// 1. 解压 ZIP 文件
 		logger.info({ msg: '🔓 正在解压 ZIP 文件', modelId });
@@ -117,9 +136,7 @@ async function handleObjZipArchive(modelId: string, zipBuffer: Buffer): Promise<
 		const zipEntries = zip.getEntries();
 
 		// 记录 ZIP 包含的文件
-		const files = zipEntries
-			.filter((entry) => !entry.isDirectory)
-			.map((entry) => entry.entryName);
+		const files = zipEntries.filter((entry) => !entry.isDirectory).map((entry) => entry.entryName);
 		logger.info({
 			msg: '📂 ZIP 包含的文件',
 			modelId,
@@ -139,6 +156,8 @@ async function handleObjZipArchive(modelId: string, zipBuffer: Buffer): Promise<
 
 		// 3. 遍历所有文件，统一命名并上传到存储服务
 		let objFileUrl = '';
+		let mtlFileUrl: string | null = null;
+		let textureFileUrl: string | null = null;
 
 		for (const entry of zipEntries) {
 			// 跳过目录
@@ -242,9 +261,16 @@ async function handleObjZipArchive(modelId: string, zipBuffer: Buffer): Promise<
 				url: fileUrl,
 			});
 
-			// 记录 OBJ 文件的 URL
+			// 记录各类文件的 URL
 			if (extension === 'obj') {
 				objFileUrl = fileUrl;
+			} else if (extension === 'mtl') {
+				mtlFileUrl = fileUrl;
+			} else if (['png', 'jpg', 'jpeg'].includes(extension)) {
+				// 记录第一个纹理文件的 URL（通常只有一个）
+				if (!textureFileUrl) {
+					textureFileUrl = fileUrl;
+				}
 			}
 		}
 
@@ -256,13 +282,148 @@ async function handleObjZipArchive(modelId: string, zipBuffer: Buffer): Promise<
 			msg: '🎉 OBJ ZIP 解压和上传完成',
 			modelId,
 			objFileUrl,
+			mtlFileUrl,
+			textureFileUrl,
 			totalFiles: files.length,
 		});
 
-		return objFileUrl;
+		return {
+			objUrl: objFileUrl,
+			mtlUrl: mtlFileUrl,
+			textureUrl: textureFileUrl,
+		};
 	} catch (error) {
 		logger.error({
 			msg: '❌ 处理 OBJ ZIP 压缩包失败',
+			modelId,
+			error,
+		});
+		throw error;
+	}
+}
+
+/**
+ * 处理非 ZIP 的 OBJ 文件（腾讯云在同目录下存储了 MTL 和纹理文件）
+ * 尝试下载同目录下的 material.mtl 和 material.png/jpg 文件
+ *
+ * @param objRemoteUrl OBJ 文件的远程 URL
+ * @param modelId 模型 ID（用于存储路径）
+ * @param objBuffer 已下载的 OBJ 文件 Buffer
+ * @returns 包含所有模型文件 URL 的对象
+ */
+async function handleObjSeparateFiles(
+	objRemoteUrl: string,
+	modelId: string,
+	objBuffer: Buffer,
+): Promise<{ objUrl: string; mtlUrl: string | null; textureUrl: string | null }> {
+	try {
+		// 1. 上传 OBJ 文件
+		logger.info({ msg: '⬆️ 正在上传 OBJ 文件到存储服务', modelId });
+		const objUrl = await storageService.uploadModel(modelId, 'model.obj', objBuffer);
+		logger.info({ msg: '✅ OBJ 文件上传成功', modelId, objUrl });
+
+		// 2. 推导 MTL 和纹理文件的 URL（将 URL 中的 model.obj 替换为 material.mtl/material.png）
+		const baseUrl = objRemoteUrl.replace('/model.obj', '');
+		const mtlRemoteUrl = `${baseUrl}/material.mtl`;
+		const texturePngUrl = `${baseUrl}/material.png`;
+		const textureJpgUrl = `${baseUrl}/material.jpg`;
+
+		logger.info({
+			msg: '🔍 尝试下载同目录的 MTL 和纹理文件',
+			modelId,
+			mtlRemoteUrl,
+			texturePngUrl,
+			textureJpgUrl,
+		});
+
+		// 3. 尝试下载 MTL 文件
+		let mtlUrl: string | null = null;
+		try {
+			logger.info({ msg: '⬇️ 尝试下载 MTL 文件', modelId, mtlRemoteUrl });
+			const mtlResponse = await fetch(mtlRemoteUrl);
+			if (mtlResponse.ok) {
+				const mtlBuffer = Buffer.from(await mtlResponse.arrayBuffer());
+				logger.info({
+					msg: '✅ MTL 文件下载成功',
+					modelId,
+					size: mtlBuffer.length,
+				});
+
+				// 上传 MTL 文件到存储服务
+				mtlUrl = await storageService.uploadModel(modelId, 'material.mtl', mtlBuffer);
+				logger.info({ msg: '✅ MTL 文件上传成功', modelId, mtlUrl });
+			} else {
+				logger.warn({
+					msg: '⚠️ MTL 文件不存在',
+					modelId,
+					status: mtlResponse.status,
+				});
+			}
+		} catch (mtlError) {
+			logger.warn({
+				msg: '⚠️ 下载 MTL 文件失败，继续处理',
+				modelId,
+				error: mtlError,
+			});
+		}
+
+		// 4. 尝试下载纹理文件（先尝试 PNG，再尝试 JPG）
+		let textureUrl: string | null = null;
+		const textureUrls = [
+			{ url: texturePngUrl, filename: 'material.png' },
+			{ url: textureJpgUrl, filename: 'material.jpg' },
+		];
+
+		for (const { url, filename } of textureUrls) {
+			if (textureUrl) break; // 如果已经找到纹理文件，跳过
+
+			try {
+				logger.info({ msg: `⬇️ 尝试下载纹理文件: ${filename}`, modelId, url });
+				const textureResponse = await fetch(url);
+				if (textureResponse.ok) {
+					const textureBuffer = Buffer.from(await textureResponse.arrayBuffer());
+					logger.info({
+						msg: `✅ 纹理文件下载成功: ${filename}`,
+						modelId,
+						size: textureBuffer.length,
+						sizeMB: (textureBuffer.length / 1024 / 1024).toFixed(2),
+					});
+
+					// 上传纹理文件到存储服务
+					textureUrl = await storageService.uploadModel(modelId, filename, textureBuffer);
+					logger.info({ msg: '✅ 纹理文件上传成功', modelId, textureUrl });
+				} else {
+					logger.warn({
+						msg: `⚠️ 纹理文件不存在: ${filename}`,
+						modelId,
+						status: textureResponse.status,
+					});
+				}
+			} catch (textureError) {
+				logger.warn({
+					msg: `⚠️ 下载纹理文件失败: ${filename}`,
+					modelId,
+					error: textureError,
+				});
+			}
+		}
+
+		logger.info({
+			msg: '🎉 非 ZIP OBJ 文件处理完成',
+			modelId,
+			objUrl,
+			mtlUrl,
+			textureUrl,
+		});
+
+		return {
+			objUrl,
+			mtlUrl,
+			textureUrl,
+		};
+	} catch (error) {
+		logger.error({
+			msg: '❌ 处理非 ZIP OBJ 文件失败',
 			modelId,
 			error,
 		});

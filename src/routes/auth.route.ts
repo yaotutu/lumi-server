@@ -101,7 +101,7 @@ export async function authRoutes(fastify: FastifyInstance) {
 				sameSite: 'lax',
 				maxAge: COOKIE_MAX_AGE,
 				path: '/',
-			domain: config.cookie.domain, // ✅ 跨端口共享 Cookie
+				domain: config.cookie.domain, // ✅ 跨端口共享 Cookie
 			});
 
 			return reply.send(

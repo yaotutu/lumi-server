@@ -1,5 +1,6 @@
 import { db } from '@/db/drizzle';
 import { type Model, type NewModel, models, users } from '@/db/schema';
+import { transformToProxyUrl } from '@/utils/url-transformer';
 import { and, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 
 /**
@@ -51,6 +52,7 @@ export class ModelRepository {
 	/**
 	 * 查询公开模型列表（支持筛选和排序）
 	 * 返回包含用户信息的模型列表（JOIN users 表）
+	 * URL 已转换为代理 URL，前端可直接使用
 	 */
 	async findPublicModels(
 		options: {
@@ -69,6 +71,8 @@ export class ModelRepository {
 				description: models.description,
 				previewImageUrl: models.previewImageUrl,
 				modelUrl: models.modelUrl,
+				mtlUrl: models.mtlUrl, // ✅ OBJ 格式专用：MTL 材质文件 URL
+				textureUrl: models.textureUrl, // ✅ OBJ 格式专用：纹理图片 URL
 				format: models.format,
 				visibility: models.visibility,
 				likeCount: models.likeCount,
@@ -97,16 +101,24 @@ export class ModelRepository {
 				),
 			);
 
-		// 根据排序方式返回不同的查询
+		// 根据排序方式获取结果
+		let results;
 		if (sortBy === 'popular') {
-			return baseQuery.orderBy(desc(models.viewCount)).limit(limit).offset(offset);
+			results = await baseQuery.orderBy(desc(models.viewCount)).limit(limit).offset(offset);
+		} else if (sortBy === 'liked') {
+			results = await baseQuery.orderBy(desc(models.likeCount)).limit(limit).offset(offset);
+		} else {
+			results = await baseQuery.orderBy(desc(models.publishedAt)).limit(limit).offset(offset);
 		}
 
-		if (sortBy === 'liked') {
-			return baseQuery.orderBy(desc(models.likeCount)).limit(limit).offset(offset);
-		}
-
-		return baseQuery.orderBy(desc(models.publishedAt)).limit(limit).offset(offset);
+		// 转换 URL 为代理 URL（解决跨域问题，前端可直接使用）
+		return results.map((model) => ({
+			...model,
+			previewImageUrl: transformToProxyUrl(model.previewImageUrl, 'image'),
+			modelUrl: transformToProxyUrl(model.modelUrl, 'model'),
+			mtlUrl: transformToProxyUrl(model.mtlUrl, 'model'), // ✅ 转换 MTL 文件 URL
+			textureUrl: transformToProxyUrl(model.textureUrl, 'model'), // ✅ 转换纹理图片 URL
+		}));
 	}
 
 	/**

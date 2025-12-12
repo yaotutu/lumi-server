@@ -137,7 +137,9 @@ export async function createRequest(userId: string, prompt: string) {
 		requestId: request.id,
 		imageIds: images.map((i) => i.id).join(','),
 		jobIds: jobs.map((j) => j.id).join(','),
-		promptVariantsAssigned: images.map((i, idx) => `[${idx}]: ${i.imagePrompt?.substring(0, 50)}...`),
+		promptVariantsAssigned: images.map(
+			(i, idx) => `[${idx}]: ${i.imagePrompt?.substring(0, 50)}...`,
+		),
 	});
 
 	// 查询完整的生成请求对象（包含关联数据）

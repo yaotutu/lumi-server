@@ -30,6 +30,8 @@ export const models = mysqlTable(
 		name: varchar('name', { length: 255 }).notNull(),
 		description: text('description'),
 		modelUrl: varchar('model_url', { length: 500 }),
+		mtlUrl: varchar('mtl_url', { length: 500 }), // ✅ MTL 材质文件 URL（OBJ 格式专用）
+		textureUrl: varchar('texture_url', { length: 500 }), // ✅ 纹理图片 URL（OBJ 格式专用）
 		previewImageUrl: varchar('preview_image_url', { length: 500 }),
 		format: varchar('format', { length: 20 }).notNull().default('OBJ'),
 		fileSize: int('file_size'),

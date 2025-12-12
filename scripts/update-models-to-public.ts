@@ -1,6 +1,6 @@
+import { eq } from 'drizzle-orm';
 import { db } from '../src/db/drizzle.js';
 import { models } from '../src/db/schema/index.js';
-import { eq } from 'drizzle-orm';
 import { logger } from '../src/utils/logger.js';
 
 /**

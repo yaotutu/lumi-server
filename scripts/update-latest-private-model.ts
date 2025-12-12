@@ -1,9 +1,9 @@
+import { desc } from 'drizzle-orm';
 /**
  * 更新最新的 PRIVATE 模型为 PUBLIC（使用完整ID）
  */
 import { db } from '../src/db/drizzle.js';
 import { models } from '../src/db/schema/index.js';
-import { desc } from 'drizzle-orm';
 
 async function updateLatestPrivateModel() {
 	console.log('🔍 查找最新的 PRIVATE 模型...\n');
@@ -29,7 +29,9 @@ async function updateLatestPrivateModel() {
 
 	console.log(`找到模型: ${model.name}`);
 	console.log(`  ID: ${model.id}`);
-	console.log(`  当前状态: visibility=${model.visibility}, completedAt=${model.completedAt ? '有' : '无'}\n`);
+	console.log(
+		`  当前状态: visibility=${model.visibility}, completedAt=${model.completedAt ? '有' : '无'}\n`,
+	);
 
 	if (model.visibility === 'PUBLIC') {
 		console.log('✅ 模型已经是 PUBLIC，无需更新');
@@ -55,7 +57,9 @@ async function updateLatestPrivateModel() {
 	console.log('📋 更新后的状态：');
 	if (updated.length > 0) {
 		console.log(`  visibility: ${updated[0].visibility}`);
-		console.log(`  publishedAt: ${updated[0].publishedAt ? updated[0].publishedAt.toISOString() : 'NULL'}`);
+		console.log(
+			`  publishedAt: ${updated[0].publishedAt ? updated[0].publishedAt.toISOString() : 'NULL'}`,
+		);
 	}
 
 	process.exit(0);

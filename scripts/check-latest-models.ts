@@ -1,9 +1,9 @@
+import { desc } from 'drizzle-orm';
 /**
  * 检查最新创建的模型状态
  */
 import { db } from '../src/db/drizzle.js';
 import { models } from '../src/db/schema/index.js';
-import { desc } from 'drizzle-orm';
 
 async function checkLatestModels() {
 	console.log('🔍 查询最新的5个模型...\n');

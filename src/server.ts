@@ -67,7 +67,14 @@ async function start() {
 			});
 		}
 	} catch (error) {
-		logger.error({ error, msg: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined }, 'Failed to start server');
+		logger.error(
+			{
+				error,
+				msg: error instanceof Error ? error.message : String(error),
+				stack: error instanceof Error ? error.stack : undefined,
+			},
+			'Failed to start server',
+		);
 		console.error('Server startup error:', error);
 		process.exit(1);
 	}

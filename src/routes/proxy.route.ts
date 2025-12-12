@@ -9,8 +9,8 @@
  * 4. 设置正确的 Content-Type 和 CORS 头
  */
 
-import AdmZip from 'adm-zip';
 import { logger } from '@/utils/logger';
+import AdmZip from 'adm-zip';
 import type { FastifyInstance } from 'fastify';
 
 /**
@@ -54,7 +54,8 @@ export async function proxyRoutes(fastify: FastifyInstance) {
 
 			if (!isAllowed) {
 				return reply.status(403).send({
-					error: 'URL not from allowed domain (must be .myqcloud.com, .aliyuncs.com, or .siliconflow.cn)',
+					error:
+						'URL not from allowed domain (must be .myqcloud.com, .aliyuncs.com, or .siliconflow.cn)',
 				});
 			}
 
@@ -132,7 +133,8 @@ export async function proxyRoutes(fastify: FastifyInstance) {
 			try {
 				const url = new URL(modelUrl);
 				// 检查是否包含腾讯云相关域名
-				isAllowed = url.hostname.includes('.tencentcos.cn') || url.hostname.includes('.myqcloud.com');
+				isAllowed =
+					url.hostname.includes('.tencentcos.cn') || url.hostname.includes('.myqcloud.com');
 			} catch {
 				return reply.status(400).send({ error: 'Invalid URL format' });
 			}
@@ -237,6 +239,53 @@ export async function proxyRoutes(fastify: FastifyInstance) {
 			} else if (extension === 'mtl') {
 				// MTL 材质文件（文本格式）
 				contentType = 'text/plain';
+
+				// ✅ 处理 MTL 文件中的纹理路径
+				// MTL 文件中的纹理引用是相对路径（如 material.png），需要替换为完整的代理 URL
+				try {
+					const mtlContent = buffer.toString('utf8');
+
+					// 从原始 URL 中提取基础路径（去掉文件名）
+					const baseUrl = modelUrl.substring(0, modelUrl.lastIndexOf('/'));
+
+					// 替换所有纹理引用的相对路径
+					// 匹配格式：map_Kd material.png, map_Ka texture.jpg 等
+					const updatedMtlContent = mtlContent.replace(
+						/(map_\w+|bump)\s+(\S+)/g,
+						(match, mapType, texturePath) => {
+							// 如果已经是完整 URL，不处理
+							if (texturePath.startsWith('http://') || texturePath.startsWith('https://')) {
+								return match;
+							}
+
+							// 构建完整的云存储 URL
+							const fullTextureUrl = `${baseUrl}/${texturePath}`;
+
+							// 构建代理 URL
+							const proxyUrl = `${request.protocol}://${request.hostname}:${request.port || 3000}/api/proxy/model?url=${encodeURIComponent(fullTextureUrl)}`;
+
+							logger.info({
+								msg: '🔄 替换 MTL 纹理路径',
+								original: texturePath,
+								fullUrl: fullTextureUrl,
+								proxyUrl,
+							});
+
+							return `${mapType} ${proxyUrl}`;
+						},
+					);
+
+					buffer = Buffer.from(updatedMtlContent, 'utf8');
+
+					logger.info({
+						msg: '✅ MTL 文件纹理路径已替换',
+						originalSize: mtlContent.length,
+						newSize: buffer.length,
+					});
+				} catch (error) {
+					logger.error({ msg: '❌ MTL 文件路径替换失败', error });
+					// 失败时返回原始内容
+				}
 			} else if (extension === 'fbx') {
 				contentType = 'application/octet-stream';
 			}

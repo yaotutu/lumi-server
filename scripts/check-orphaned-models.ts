@@ -1,6 +1,6 @@
+import { sql } from 'drizzle-orm';
 import { db } from '../src/db/drizzle.js';
 import { generationRequests, models } from '../src/db/schema/index.js';
-import { sql } from 'drizzle-orm';
 import { logger } from '../src/utils/logger.js';
 
 /**
@@ -16,9 +16,7 @@ async function checkOrphanedModels() {
 		logger.info({ count: requestCount.count }, '📊 生成请求（任务）总数');
 
 		// 2. 统计 models 表的记录数
-		const [modelCount] = await db
-			.select({ count: sql<number>`count(*)` })
-			.from(models);
+		const [modelCount] = await db.select({ count: sql<number>`count(*)` }).from(models);
 
 		logger.info({ count: modelCount.count }, '📊 模型总数');
 

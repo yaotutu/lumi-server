@@ -35,9 +35,7 @@ export async function buildApp() {
 
 	// 安全插件 - 需要为 Scalar UI 放宽 CSP 限制
 	await app.register(helmet, {
-		contentSecurityPolicy: config.isProduction
-			? undefined
-			: false, // 开发环境禁用 CSP 以支持 Scalar UI
+		contentSecurityPolicy: config.isProduction ? undefined : false, // 开发环境禁用 CSP 以支持 Scalar UI
 		crossOriginResourcePolicy: { policy: 'cross-origin' }, // ✅ 允许跨域资源加载（解决图片代理 CORP 问题）
 	});
 

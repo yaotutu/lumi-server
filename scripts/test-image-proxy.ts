@@ -8,7 +8,8 @@
 
 // 测试URL（从数据库中获取的真实URL）
 const testUrls = {
-	aliyun: 'https://bizyair-prod.oss-cn-shanghai.aliyuncs.com/outputs%2Fdc9a0257-d794-4fe7-8790-72fe9e737609_59cd0eb2fac0816348c4780ce2fef879_ComfyUI_f1de3cde_00001_.png?OSSAccessKeyId=LTAI5tPza7RAEKed35dCML5U&Expires=1765521559&Signature=XUfiAIeCeIIMTxuY7vZAJq99RVI%3D',
+	aliyun:
+		'https://bizyair-prod.oss-cn-shanghai.aliyuncs.com/outputs%2Fdc9a0257-d794-4fe7-8790-72fe9e737609_59cd0eb2fac0816348c4780ce2fef879_ComfyUI_f1de3cde_00001_.png?OSSAccessKeyId=LTAI5tPza7RAEKed35dCML5U&Expires=1765521559&Signature=XUfiAIeCeIIMTxuY7vZAJq99RVI%3D',
 	// S3 URL 示例（实际使用时会有真实的S3 URL）
 	s3: 'https://ai3d-1375240212.cos.ap-guangzhou.myqcloud.com/images/test-request-id/0.png',
 };

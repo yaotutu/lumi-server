@@ -14,11 +14,9 @@ import type { ModelJobData } from '@/queues';
 import { modelJobRepository, modelRepository } from '@/repositories';
 import { sseConnectionManager } from '@/services/sse-connection-manager';
 import { logger } from '@/utils/logger';
-import {
-	downloadAndUploadModel,
-	downloadAndUploadPreviewImage,
-} from '@/utils/model-storage.js';
+import { downloadAndUploadModel, downloadAndUploadPreviewImage } from '@/utils/model-storage.js';
 import { redisClient } from '@/utils/redis-client';
+import { transformToProxyUrl } from '@/utils/url-transformer';
 import { type Job, Worker } from 'bullmq';
 
 /**
@@ -128,7 +126,7 @@ async function processModelJob(job: Job<ModelJobData>) {
 				});
 
 				// ✅ 下载模型并上传到 S3（如果是 ZIP 会自动解压）
-				const storageUrl = await downloadAndUploadModel(
+				const { objUrl, mtlUrl, textureUrl } = await downloadAndUploadModel(
 					modelFile.url,
 					modelId,
 					modelFile.type?.toLowerCase() || 'obj',
@@ -136,7 +134,9 @@ async function processModelJob(job: Job<ModelJobData>) {
 
 				logger.info({
 					msg: '✅ 模型已上传到 S3',
-					storageUrl,
+					objUrl,
+					mtlUrl,
+					textureUrl,
 					jobId,
 					modelId,
 				});
@@ -169,7 +169,9 @@ async function processModelJob(job: Job<ModelJobData>) {
 				// 更新 Model 记录（保存 S3 URL）
 				const completedAt = new Date();
 				await modelRepository.update(modelId, {
-					modelUrl: storageUrl, // ✅ 保存 S3 URL，不是腾讯云 URL
+					modelUrl: objUrl, // ✅ 保存 OBJ 文件 URL（S3 URL，不是腾讯云 URL）
+					mtlUrl, // ✅ 保存 MTL 材质文件 URL
+					textureUrl, // ✅ 保存纹理图片 URL
 					previewImageUrl: previewImageStorageUrl,
 					format: modelFile.type || 'OBJ',
 					completedAt,
@@ -181,11 +183,13 @@ async function processModelJob(job: Job<ModelJobData>) {
 					completedAt,
 				});
 
-				// ✅ SSE 推送: model:completed
+				// ✅ SSE 推送: model:completed（推送代理 URL，前端可直接使用）
 				await sseConnectionManager.broadcast(requestId, 'model:completed', {
 					modelId,
-					modelUrl: storageUrl, // ✅ 推送 S3 URL
-					previewImageUrl: previewImageStorageUrl,
+					modelUrl: transformToProxyUrl(objUrl, 'model'), // ✅ 转换为代理 URL
+					mtlUrl: transformToProxyUrl(mtlUrl, 'model'), // ✅ 转换为代理 URL
+					textureUrl: transformToProxyUrl(textureUrl, 'model'), // ✅ 转换为代理 URL
+					previewImageUrl: transformToProxyUrl(previewImageStorageUrl, 'image'), // ✅ 转换为代理 URL
 					format: modelFile.type || 'OBJ',
 					completedAt,
 				});

@@ -62,7 +62,7 @@ const envSchema = z.object({
 	FRONTEND_URLS: z
 		.string()
 		.default('http://localhost:4100,http://192.168.88.100:4100')
-		.transform((val) => val.split(',').map(url => url.trim())),
+		.transform((val) => val.split(',').map((url) => url.trim())),
 
 	// Cookie domain 配置（跨端口共享 Cookie）
 	COOKIE_DOMAIN: z.string().default('192.168.88.100'),

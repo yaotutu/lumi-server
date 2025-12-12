@@ -9,7 +9,8 @@
  */
 export function adaptGenerationRequest(request: any): any {
 	// 直接使用后端的 status 和 phase
-	const status = request.status || deriveStatusFromPhase(request.phase, request.images, request.model);
+	const status =
+		request.status || deriveStatusFromPhase(request.phase, request.images, request.model);
 
 	// 适配 images 字段：将 imageUrl 映射为 url（向后兼容）
 	const adaptedImages = request.images.map((img: any) => ({
@@ -63,7 +64,8 @@ export function adaptGenerationRequest(request: any): any {
 
 		adaptedModels = [adaptedModel];
 
-		modelGenerationStartedAt = model.createdAt instanceof Date ? model.createdAt : new Date(model.createdAt);
+		modelGenerationStartedAt =
+			model.createdAt instanceof Date ? model.createdAt : new Date(model.createdAt);
 	}
 
 	return {
@@ -80,7 +82,11 @@ export function adaptGenerationRequest(request: any): any {
 /**
  * 从 phase 和数据推导 status（当后端 status 字段为空时）
  */
-function deriveStatusFromPhase(phase: string | null | undefined, images: any[], model: any): string {
+function deriveStatusFromPhase(
+	phase: string | null | undefined,
+	images: any[],
+	model: any,
+): string {
 	// 如果有明确的 phase，基于 phase 推导
 	if (phase) {
 		switch (phase) {

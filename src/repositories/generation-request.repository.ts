@@ -8,6 +8,7 @@ import {
 	modelGenerationJobs,
 	models,
 } from '@/db/schema';
+import { transformToProxyUrl } from '@/utils/url-transformer';
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
 
 /**
@@ -31,6 +32,7 @@ export class GenerationRequestRepository {
 	/**
 	 * 根据 ID 查询请求（包含关联的 images 和 model）
 	 * 手动加载关联数据，确保与 Prisma 格式一致
+	 * URL 已转换为代理 URL，前端可直接使用
 	 */
 	async findById(id: string) {
 		// 1. 查询主请求
@@ -69,7 +71,6 @@ export class GenerationRequestRepository {
 			.where(eq(generatedImages.requestId, id))
 			.orderBy(asc(generatedImages.index));
 
-
 		// 3. 查询关联的 model（带 generationJob）
 		const [modelRow] = await db
 			.select({
@@ -81,6 +82,8 @@ export class GenerationRequestRepository {
 				name: models.name,
 				description: models.description,
 				modelUrl: models.modelUrl,
+				mtlUrl: models.mtlUrl, // ✅ OBJ 格式专用：MTL 材质文件 URL
+				textureUrl: models.textureUrl, // ✅ OBJ 格式专用：纹理图片 URL
 				previewImageUrl: models.previewImageUrl,
 				format: models.format,
 				fileSize: models.fileSize,
@@ -109,11 +112,27 @@ export class GenerationRequestRepository {
 			.where(eq(models.requestId, id))
 			.limit(1);
 
-		// 4. 组装返回数据（与 Prisma 格式一致）
+		// 4. 转换 URL 为代理 URL（解决跨域问题，前端可直接使用）
+		const transformedImages = images.map((img) => ({
+			...img,
+			imageUrl: transformToProxyUrl(img.imageUrl, 'image'),
+		}));
+
+		const transformedModel = modelRow
+			? {
+					...modelRow,
+					modelUrl: transformToProxyUrl(modelRow.modelUrl, 'model'),
+					mtlUrl: transformToProxyUrl(modelRow.mtlUrl, 'model'), // ✅ 转换 MTL 文件 URL
+					textureUrl: transformToProxyUrl(modelRow.textureUrl, 'model'), // ✅ 转换纹理图片 URL
+					previewImageUrl: transformToProxyUrl(modelRow.previewImageUrl, 'image'),
+				}
+			: null;
+
+		// 5. 组装返回数据（与 Prisma 格式一致）
 		const result = {
 			...request,
-			images: images,
-			model: modelRow || null,
+			images: transformedImages,
+			model: transformedModel,
 		};
 
 		return result;
@@ -122,6 +141,7 @@ export class GenerationRequestRepository {
 	/**
 	 * 根据用户 ID 查询请求列表（分页，包含关联数据）
 	 * 手动加载关联数据，确保与 Prisma 格式一致
+	 * URL 已转换为代理 URL，前端可直接使用
 	 */
 	async findByUserId(
 		userId: string,
@@ -168,7 +188,12 @@ export class GenerationRequestRepository {
 			})
 			.from(generatedImages)
 			.leftJoin(imageGenerationJobs, eq(generatedImages.id, imageGenerationJobs.imageId))
-			.where(sql`${generatedImages.requestId} IN (${sql.join(requestIds.map((id) => sql`${id}`), sql`, `)})`)
+			.where(
+				sql`${generatedImages.requestId} IN (${sql.join(
+					requestIds.map((id) => sql`${id}`),
+					sql`, `,
+				)})`,
+			)
 			.orderBy(asc(generatedImages.index));
 
 		// 3. 批量查询所有请求的 models
@@ -177,6 +202,8 @@ export class GenerationRequestRepository {
 				id: models.id,
 				requestId: models.requestId,
 				modelUrl: models.modelUrl,
+				mtlUrl: models.mtlUrl, // ✅ OBJ 格式专用：MTL 材质文件 URL
+				textureUrl: models.textureUrl, // ✅ OBJ 格式专用：纹理图片 URL
 				previewImageUrl: models.previewImageUrl,
 				format: models.format,
 				completedAt: models.completedAt,
@@ -189,21 +216,37 @@ export class GenerationRequestRepository {
 			})
 			.from(models)
 			.leftJoin(modelGenerationJobs, eq(models.id, modelGenerationJobs.modelId))
-			.where(sql`${models.requestId} IN (${sql.join(requestIds.map((id) => sql`${id}`), sql`, `)})`);
+			.where(
+				sql`${models.requestId} IN (${sql.join(
+					requestIds.map((id) => sql`${id}`),
+					sql`, `,
+				)})`,
+			);
 
-		// 4. 按 requestId 分组
+		// 4. 按 requestId 分组并转换 URL
 		const imagesMap = new Map<string, typeof allImages>();
 		for (const img of allImages) {
 			if (!imagesMap.has(img.requestId)) {
 				imagesMap.set(img.requestId, []);
 			}
-			imagesMap.get(img.requestId)!.push(img);
+			// 转换图片 URL
+			imagesMap.get(img.requestId)!.push({
+				...img,
+				imageUrl: transformToProxyUrl(img.imageUrl, 'image'),
+			});
 		}
 
 		const modelsMap = new Map<string, (typeof allModels)[0]>();
 		for (const model of allModels) {
 			if (model.requestId) {
-				modelsMap.set(model.requestId, model);
+				// 转换模型 URL
+				modelsMap.set(model.requestId, {
+					...model,
+					modelUrl: transformToProxyUrl(model.modelUrl, 'model'),
+					mtlUrl: transformToProxyUrl(model.mtlUrl, 'model'), // ✅ 转换 MTL 文件 URL
+					textureUrl: transformToProxyUrl(model.textureUrl, 'model'), // ✅ 转换纹理图片 URL
+					previewImageUrl: transformToProxyUrl(model.previewImageUrl, 'image'),
+				});
 			}
 		}
 
