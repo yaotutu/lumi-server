@@ -4,6 +4,7 @@
  * 职责:
  * - 从 image-generation 队列消费任务
  * - 调用图片生成 Provider 生成图片
+ * - 下载临时图片并上传到 S3（永久存储）
  * - 更新 GeneratedImage 和 ImageGenerationJob 状态
  * - 通过 SSE 实时推送状态更新
  * - 处理失败和重试逻辑
@@ -13,6 +14,7 @@ import { createImageProvider } from '@/providers/image';
 import type { ImageJobData } from '@/queues';
 import { generatedImageRepository, imageJobRepository, generationRequestRepository } from '@/repositories';
 import { sseConnectionManager } from '@/services/sse-connection-manager';
+import { storageService } from '@/services/storage.service';
 import { logger } from '@/utils/logger';
 import { redisClient } from '@/utils/redis-client';
 import { type Job, Worker } from 'bullmq';
@@ -45,6 +47,8 @@ async function processImageJob(job: Job<ImageJobData>) {
 		}
 
 		const imageIndex = imageData.index;
+		// ✅ 使用数据库中已优化的提示词（如果存在）
+		const optimizedPrompt = imageData.imagePrompt || prompt;
 
 		logger.info({
 			msg: '✅ 已从数据库查询任务信息',
@@ -53,6 +57,9 @@ async function processImageJob(job: Job<ImageJobData>) {
 			imageIndex,
 			imageStatus: imageData.imageStatus,
 			jobStatus: imageJobData.status,
+			hasOptimizedPrompt: !!imageData.imagePrompt,
+			originalPrompt: prompt.substring(0, 50) + '...',
+			optimizedPrompt: optimizedPrompt.substring(0, 50) + '...',
 		});
 
 		// 更新 Job 状态为 RUNNING
@@ -75,7 +82,7 @@ async function processImageJob(job: Job<ImageJobData>) {
 		await sseConnectionManager.broadcast(requestId, 'image:generating', {
 			imageId,
 			index: imageIndex,
-			prompt,
+			prompt: optimizedPrompt, // 使用优化后的提示词
 		});
 
 		logger.info({
@@ -90,37 +97,61 @@ async function processImageJob(job: Job<ImageJobData>) {
 		logger.info({
 			msg: '🎨 调用图片生成服务',
 			provider: imageProvider.getName(),
-			prompt,
+			imageIndex,
+			usingOptimizedPrompt: !!imageData.imagePrompt,
+			promptPreview: optimizedPrompt.substring(0, 100) + '...',
 		});
 
-		// 生成单张图片
-		const imageUrls = await imageProvider.generateImages(prompt, 1);
-		const imageUrl = imageUrls[0];
+		// ✅ 使用优化后的提示词生成图片
+		const imageUrls = await imageProvider.generateImages(optimizedPrompt, 1);
+		const temporaryImageUrl = imageUrls[0];
 
-		if (!imageUrl) {
+		if (!temporaryImageUrl) {
 			throw new Error('图片生成失败: 未返回图片 URL');
 		}
 
 		logger.info({
-			msg: '✅ 图片生成成功',
-			imageUrl,
+			msg: '✅ 图片生成成功（临时 URL）',
+			temporaryImageUrl,
 			jobId,
 			imageId,
 		});
 
-		// 更新 Image 记录
+		// ✅ 下载图片并上传到 S3（永久存储）
+		logger.info({
+			msg: '📥 开始下载并上传图片到 S3',
+			temporaryImageUrl,
+			requestId,
+			imageIndex,
+		});
+
+		const s3ImageUrl = await storageService.uploadImageFromUrl(
+			temporaryImageUrl,
+			requestId,
+			imageIndex,
+		);
+
+		logger.info({
+			msg: '✅ 图片已上传到 S3（永久 URL）',
+			s3ImageUrl,
+			temporaryImageUrl,
+			jobId,
+			imageId,
+		});
+
+		// 更新 Image 记录（保存 S3 URL）
 		const completedAt = new Date();
 		await generatedImageRepository.update(imageId, {
-			imageUrl,
+			imageUrl: s3ImageUrl, // ✅ 保存 S3 URL（永久有效）
 			imageStatus: 'COMPLETED',
 			completedAt,
 		});
 
-		// ✅ SSE 推送: image:completed
+		// ✅ SSE 推送: image:completed（推送 S3 URL）
 		await sseConnectionManager.broadcast(requestId, 'image:completed', {
 			imageId,
 			index: imageIndex,
-			imageUrl,
+			imageUrl: s3ImageUrl, // ✅ 推送 S3 URL
 			completedAt,
 		});
 
@@ -129,7 +160,7 @@ async function processImageJob(job: Job<ImageJobData>) {
 			requestId,
 			imageId,
 			index: imageIndex,
-			imageUrl,
+			imageUrl: s3ImageUrl,
 		});
 
 		// 更新 Job 状态为 COMPLETED
@@ -153,8 +184,8 @@ async function processImageJob(job: Job<ImageJobData>) {
 		// ✅ SSE 推送: task:updated (所有图片完成)
 		if (allCompleted && totalImages > 0) {
 			await generationRequestRepository.update(requestId, {
-				requestStatus: 'IMAGE_COMPLETED',
-				requestPhase: 'AWAITING_SELECTION',
+				status: 'IMAGE_COMPLETED',
+				phase: 'AWAITING_SELECTION',
 			});
 
 			await sseConnectionManager.broadcast(requestId, 'task:updated', {
@@ -170,7 +201,7 @@ async function processImageJob(job: Job<ImageJobData>) {
 			});
 		}
 
-		return { success: true, imageUrl };
+		return { success: true, imageUrl: s3ImageUrl };
 	} catch (error) {
 		logger.error({
 			msg: '❌ 图片生成任务失败',

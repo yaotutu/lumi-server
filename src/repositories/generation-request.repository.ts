@@ -112,10 +112,9 @@ export class GenerationRequestRepository {
 		// 4. 组装返回数据（与 Prisma 格式一致）
 		const result = {
 			...request,
-			images,
+			images: images,
 			model: modelRow || null,
 		};
-
 
 		return result;
 	}
@@ -209,11 +208,16 @@ export class GenerationRequestRepository {
 		}
 
 		// 5. 组装返回数据（与 Prisma 格式一致）
-		return requests.map((request) => ({
-			...request,
-			images: imagesMap.get(request.id) || [],
-			model: modelsMap.get(request.id) || null,
-		}));
+		return requests.map((request) => {
+			const images = imagesMap.get(request.id) || [];
+			const model = modelsMap.get(request.id) || null;
+
+			return {
+				...request,
+				images: images,
+				model: model,
+			};
+		});
 	}
 
 	/**

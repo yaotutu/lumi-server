@@ -14,6 +14,10 @@ import type { ModelJobData } from '@/queues';
 import { modelJobRepository, modelRepository } from '@/repositories';
 import { sseConnectionManager } from '@/services/sse-connection-manager';
 import { logger } from '@/utils/logger';
+import {
+	downloadAndUploadModel,
+	downloadAndUploadPreviewImage,
+} from '@/utils/model-storage.js';
 import { redisClient } from '@/utils/redis-client';
 import { type Job, Worker } from 'bullmq';
 
@@ -116,17 +120,57 @@ async function processModelJob(job: Job<ModelJobData>) {
 				}
 
 				logger.info({
-					msg: '✅ 3D模型生成成功',
-					modelUrl: modelFile.url,
+					msg: '✅ 3D模型生成成功，准备下载并上传到 S3',
+					tencentUrl: modelFile.url,
 					format: modelFile.type,
 					jobId,
 					modelId,
 				});
 
-				// 更新 Model 记录
+				// ✅ 下载模型并上传到 S3（如果是 ZIP 会自动解压）
+				const storageUrl = await downloadAndUploadModel(
+					modelFile.url,
+					modelId,
+					modelFile.type?.toLowerCase() || 'obj',
+				);
+
+				logger.info({
+					msg: '✅ 模型已上传到 S3',
+					storageUrl,
+					jobId,
+					modelId,
+				});
+
+				// ✅ 下载并保存预览图（如果有）
+				let previewImageStorageUrl: string | undefined;
+				if (modelFile.previewImageUrl) {
+					try {
+						previewImageStorageUrl = await downloadAndUploadPreviewImage(
+							modelFile.previewImageUrl,
+							modelId,
+						);
+
+						logger.info({
+							msg: '✅ 预览图已上传到 S3',
+							previewImageStorageUrl,
+							jobId,
+							modelId,
+						});
+					} catch (error) {
+						logger.warn({
+							msg: '⚠️ 预览图下载失败',
+							jobId,
+							modelId,
+							error: error instanceof Error ? error.message : String(error),
+						});
+					}
+				}
+
+				// 更新 Model 记录（保存 S3 URL）
 				const completedAt = new Date();
 				await modelRepository.update(modelId, {
-					modelUrl: modelFile.url,
+					modelUrl: storageUrl, // ✅ 保存 S3 URL，不是腾讯云 URL
+					previewImageUrl: previewImageStorageUrl,
 					format: modelFile.type || 'OBJ',
 					completedAt,
 				});
@@ -140,7 +184,8 @@ async function processModelJob(job: Job<ModelJobData>) {
 				// ✅ SSE 推送: model:completed
 				await sseConnectionManager.broadcast(requestId, 'model:completed', {
 					modelId,
-					modelUrl: modelFile.url,
+					modelUrl: storageUrl, // ✅ 推送 S3 URL
+					previewImageUrl: previewImageStorageUrl,
 					format: modelFile.type || 'OBJ',
 					completedAt,
 				});

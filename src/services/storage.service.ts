@@ -129,7 +129,12 @@ class StorageService {
 	 */
 	getPublicUrl(key: string): string {
 		if (config.s3.endpoint) {
-			// 自定义 endpoint（如 MinIO）
+			// 检查是否是腾讯云 COS
+			if (config.s3.endpoint.includes('myqcloud.com')) {
+				// 腾讯云 COS URL 格式：https://{bucket}.cos.{region}.myqcloud.com/{key}
+				return `https://${this.bucket}.cos.${config.s3.region}.myqcloud.com/${key}`;
+			}
+			// 其他自定义 endpoint（如 MinIO）：{endpoint}/{bucket}/{key}
 			const baseUrl = config.s3.endpoint.replace(/\/$/, '');
 			return `${baseUrl}/${this.bucket}/${key}`;
 		}
@@ -171,6 +176,86 @@ class StorageService {
 		}
 		// 没有扩展名的文件：直接在末尾添加后缀
 		return `${key}${THUMBNAIL_SUFFIX}`;
+	}
+
+	/**
+	 * 上传模型文件到 S3
+	 * 路径格式: models/{modelId}/{filename}
+	 *
+	 * @param modelId 模型 ID
+	 * @param filename 文件名（如 model.obj, material.mtl, material.png）
+	 * @param data 文件数据
+	 * @returns S3 公开访问 URL
+	 */
+	async uploadModel(modelId: string, filename: string, data: Buffer): Promise<string> {
+		const key = `models/${modelId}/${filename}`;
+
+		// 根据文件扩展名确定 Content-Type
+		const ext = filename.split('.').pop()?.toLowerCase();
+		let contentType = 'application/octet-stream';
+
+		if (ext === 'obj' || ext === 'mtl') {
+			contentType = 'text/plain';
+		} else if (ext === 'glb') {
+			contentType = 'model/gltf-binary';
+		} else if (ext === 'gltf') {
+			contentType = 'model/gltf+json';
+		} else if (ext === 'png') {
+			contentType = 'image/png';
+		} else if (ext === 'jpg' || ext === 'jpeg') {
+			contentType = 'image/jpeg';
+		}
+
+		return this.upload(key, data, { contentType });
+	}
+
+	/**
+	 * 从 URL 下载图片并上传到 S3
+	 * 路径格式: images/{requestId}/{index}.png
+	 *
+	 * @param imageUrl 临时图片 URL（阿里云/SiliconFlow）
+	 * @param requestId 生成请求 ID
+	 * @param index 图片索引
+	 * @returns S3 公开访问 URL
+	 */
+	async uploadImageFromUrl(imageUrl: string, requestId: string, index: number): Promise<string> {
+		try {
+			logger.info({ imageUrl, requestId, index }, '📥 开始从临时 URL 下载图片');
+
+			// 1. 从临时 URL 下载图片
+			const response = await fetch(imageUrl);
+			if (!response.ok) {
+				throw new Error(`下载图片失败: ${response.status} ${response.statusText}`);
+			}
+
+			const arrayBuffer = await response.arrayBuffer();
+			const buffer = Buffer.from(arrayBuffer);
+
+			logger.info(
+				{ size: buffer.length, requestId, index },
+				'✅ 图片下载成功，准备上传到 S3',
+			);
+
+			// 2. 生成 S3 key（使用 PNG 格式）
+			const key = `images/${requestId}/${index}.png`;
+
+			// 3. 上传到 S3
+			const s3Url = await this.upload(key, buffer, {
+				contentType: 'image/png',
+				metadata: {
+					requestId,
+					index: index.toString(),
+					sourceUrl: imageUrl,
+				},
+			});
+
+			logger.info({ s3Url, requestId, index }, '✅ 图片已上传到 S3');
+
+			return s3Url;
+		} catch (error) {
+			logger.error({ error, imageUrl, requestId, index }, '❌ 上传图片到 S3 失败');
+			throw error;
+		}
 	}
 }
 

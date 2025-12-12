@@ -1,6 +1,6 @@
 import { db } from '@/db/drizzle';
-import { type Model, type NewModel, models } from '@/db/schema';
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { type Model, type NewModel, models, users } from '@/db/schema';
+import { and, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 
 /**
  * Model Repository
@@ -50,6 +50,7 @@ export class ModelRepository {
 
 	/**
 	 * 查询公开模型列表（支持筛选和排序）
+	 * 返回包含用户信息的模型列表（JOIN users 表）
 	 */
 	async findPublicModels(
 		options: {
@@ -57,10 +58,44 @@ export class ModelRepository {
 			limit?: number;
 			offset?: number;
 		} = {},
-	): Promise<Model[]> {
+	): Promise<any[]> {
 		const { sortBy = 'latest', limit = 20, offset = 0 } = options;
 
-		const baseQuery = db.select().from(models).where(eq(models.visibility, 'PUBLIC'));
+		// 构建查询，JOIN users 表获取用户信息
+		const baseQuery = db
+			.select({
+				id: models.id,
+				name: models.name,
+				description: models.description,
+				previewImageUrl: models.previewImageUrl,
+				modelUrl: models.modelUrl,
+				format: models.format,
+				visibility: models.visibility,
+				likeCount: models.likeCount,
+				favoriteCount: models.favoriteCount,
+				viewCount: models.viewCount,
+				downloadCount: models.downloadCount,
+				userId: models.userId,
+				requestId: models.requestId,
+				sourceImageId: models.sourceImageId,
+				publishedAt: models.publishedAt,
+				completedAt: models.completedAt,
+				createdAt: models.createdAt,
+				updatedAt: models.updatedAt,
+				// 关联 user 信息
+				user: {
+					id: users.id,
+					name: users.name,
+				},
+			})
+			.from(models)
+			.leftJoin(users, eq(models.userId, users.id))
+			.where(
+				and(
+					eq(models.visibility, 'PUBLIC'),
+					isNotNull(models.completedAt), // 只返回已完成的模型
+				),
+			);
 
 		// 根据排序方式返回不同的查询
 		if (sortBy === 'popular') {
@@ -75,13 +110,18 @@ export class ModelRepository {
 	}
 
 	/**
-	 * 统计公开模型总数
+	 * 统计公开模型总数（只统计已完成的模型）
 	 */
 	async countPublicModels(): Promise<number> {
 		const [result] = await db
 			.select({ count: sql<number>`count(*)` })
 			.from(models)
-			.where(eq(models.visibility, 'PUBLIC'));
+			.where(
+				and(
+					eq(models.visibility, 'PUBLIC'),
+					isNotNull(models.completedAt), // 只统计已完成的模型
+				),
+			);
 
 		return result.count;
 	}

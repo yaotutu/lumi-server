@@ -20,7 +20,13 @@
 		"format": "biome format --write .",
 		"check": "biome check --write . && tsc --noEmit"
 	},
-	"keywords": ["fastify", "drizzle", "redis", "bullmq", "s3"],
+	"keywords": [
+		"fastify",
+		"drizzle",
+		"redis",
+		"bullmq",
+		"s3"
+	],
 	"author": "",
 	"license": "MIT",
 	"dependencies": {
@@ -34,6 +40,7 @@
 		"@fastify/swagger": "^9.6.1",
 		"@paralleldrive/cuid2": "^3.0.4",
 		"@scalar/fastify-api-reference": "^1.40.3",
+		"adm-zip": "^0.5.16",
 		"bullmq": "^5.37.0",
 		"dotenv": "^16.4.7",
 		"drizzle-orm": "^0.38.3",
@@ -48,6 +55,7 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^1.9.4",
+		"@types/adm-zip": "^0.5.7",
 		"@types/node": "^22.10.2",
 		"@types/supertest": "^6.0.3",
 		"drizzle-kit": "^0.30.1",

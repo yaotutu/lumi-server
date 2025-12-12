@@ -55,7 +55,7 @@ export async function getRequestById(requestId: string) {
  *
  * 自动创建：
  * - 1 个 GenerationRequest（无状态）
- * - 4 个 GeneratedImage（imageStatus=PENDING，imageUrl=null）
+ * - 4 个 GeneratedImage（imageStatus=PENDING，imageUrl=null，imagePrompt=风格变体）
  * - 4 个 ImageGenerationJob（status=PENDING）
  *
  * @param userId 用户ID
@@ -76,6 +76,31 @@ export async function createRequest(userId: string, prompt: string) {
 		throw new ValidationError('提示词长度不能超过500个字符');
 	}
 
+	// 🤖 生成 4 个不同风格的提示词变体
+	logger.info({
+		msg: '🎨 开始生成多风格提示词变体',
+		originalPrompt: trimmedPrompt,
+	});
+
+	let promptVariants: string[];
+	try {
+		const { generateMultiStylePrompts } = await import('./prompt-optimizer.service.js');
+		promptVariants = await generateMultiStylePrompts(trimmedPrompt);
+
+		logger.info({
+			msg: '✅ 提示词变体生成成功',
+			variantsCount: promptVariants.length,
+			variants: promptVariants,
+		});
+	} catch (error) {
+		// 降级策略：LLM 调用失败时，使用原始提示词的 4 个副本
+		logger.warn({
+			msg: '⚠️ 提示词变体生成失败，使用原始提示词',
+			error: error instanceof Error ? error.message : String(error),
+		});
+		promptVariants = [trimmedPrompt, trimmedPrompt, trimmedPrompt, trimmedPrompt];
+	}
+
 	// 创建生成请求
 	const requestId = createId();
 	const request = await generationRequestRepository.create({
@@ -86,13 +111,14 @@ export async function createRequest(userId: string, prompt: string) {
 		phase: 'IMAGE_GENERATION',
 	});
 
-	// 创建 4 个 GeneratedImage 记录
+	// 创建 4 个 GeneratedImage 记录（每个使用不同的提示词变体）
 	const imageData = Array.from({ length: 4 }, (_, index) => ({
 		id: createId(),
 		requestId,
 		index,
 		imageStatus: 'PENDING' as const,
 		imageUrl: null,
+		imagePrompt: promptVariants[index], // ✅ 分配对应的提示词变体
 	}));
 	const images = await generatedImageRepository.createMany(imageData);
 
@@ -111,6 +137,7 @@ export async function createRequest(userId: string, prompt: string) {
 		requestId: request.id,
 		imageIds: images.map((i) => i.id).join(','),
 		jobIds: jobs.map((j) => j.id).join(','),
+		promptVariantsAssigned: images.map((i, idx) => `[${idx}]: ${i.imagePrompt?.substring(0, 50)}...`),
 	});
 
 	// 查询完整的生成请求对象（包含关联数据）
@@ -137,9 +164,9 @@ export async function selectImageAndGenerateModel(requestId: string, selectedIma
 	// 验证生成请求存在
 	const request = await getRequestById(requestId);
 
-	// 验证请求状态
-	if (request.phase !== 'IMAGE_GENERATION') {
-		throw new ValidationError('请求不在图片生成阶段,无法选择图片');
+	// 验证请求状态 - 必须在等待选择阶段（图片已生成完成）
+	if (request.phase !== 'AWAITING_SELECTION') {
+		throw new ValidationError('请求不在等待选择阶段,无法选择图片');
 	}
 
 	// 获取所有图片
@@ -166,7 +193,7 @@ export async function selectImageAndGenerateModel(requestId: string, selectedIma
 		status: 'MODEL_PENDING',
 	});
 
-	// 创建 Model
+	// 创建 Model（默认为 PUBLIC，自动发布）
 	const modelId = createId();
 	const model = await modelRepository.create({
 		id: modelId,
@@ -174,7 +201,8 @@ export async function selectImageAndGenerateModel(requestId: string, selectedIma
 		userId: request.userId,
 		name: `模型-${requestId.substring(0, 8)}`,
 		previewImageUrl: selectedImage.imageUrl,
-		visibility: 'PRIVATE',
+		visibility: 'PUBLIC',
+		publishedAt: new Date(), // 默认公开，设置发布时间
 	});
 
 	// 创建 ModelGenerationJob
@@ -225,7 +253,18 @@ export async function deleteRequest(requestId: string) {
 	// const storageProvider = createStorageProvider();
 	// await storageProvider.deleteTaskResources(requestId);
 
-	// 调用 Repository 层删除数据库记录（级联删除 images 和 models）
+	// 1. 先删除关联的模型记录（如果存在）
+	const associatedModel = await modelRepository.findByRequestId(requestId);
+	if (associatedModel) {
+		await modelRepository.delete(associatedModel.id);
+		logger.info({
+			msg: '✅ 已删除关联的模型',
+			requestId,
+			modelId: associatedModel.id,
+		});
+	}
+
+	// 2. 调用 Repository 层删除数据库记录（级联删除 images）
 	await generationRequestRepository.delete(requestId);
 
 	logger.info({

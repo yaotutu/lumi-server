@@ -38,6 +38,7 @@ export async function buildApp() {
 		contentSecurityPolicy: config.isProduction
 			? undefined
 			: false, // 开发环境禁用 CSP 以支持 Scalar UI
+		crossOriginResourcePolicy: { policy: 'cross-origin' }, // ✅ 允许跨域资源加载（解决图片代理 CORP 问题）
 	});
 
 	// Cookie 支持

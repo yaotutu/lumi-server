@@ -1,7 +1,8 @@
 import { config as dotenvConfig } from 'dotenv';
 import { z } from 'zod';
 
-dotenvConfig();
+// 强制覆盖已存在的环境变量，确保 .env 文件优先级最高
+dotenvConfig({ override: true });
 
 const envSchema = z.object({
 	// 服务器配置
@@ -65,6 +66,10 @@ const envSchema = z.object({
 
 	// Cookie domain 配置（跨端口共享 Cookie）
 	COOKIE_DOMAIN: z.string().default('192.168.88.100'),
+
+	// 服务器公开访问 URL（用于生成代理 URL）
+	// TODO: 后期优化 - 配置 CORS 后，可不再需要代理
+	PUBLIC_URL: z.string().optional(),
 });
 
 const parseResult = envSchema.safeParse(process.env);
@@ -86,6 +91,9 @@ export const config = {
 	server: {
 		port: Number.parseInt(env.PORT, 10),
 		host: env.HOST,
+		// 公开访问 URL，用于生成代理 URL（如 http://192.168.88.100:3000）
+		// 如果未配置，默认使用 http://localhost:${PORT}
+		publicUrl: env.PUBLIC_URL,
 	},
 
 	logger: {

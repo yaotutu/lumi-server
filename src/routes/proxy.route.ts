@@ -9,6 +9,7 @@
  * 4. 设置正确的 Content-Type 和 CORS 头
  */
 
+import AdmZip from 'adm-zip';
 import { logger } from '@/utils/logger';
 import type { FastifyInstance } from 'fastify';
 
@@ -111,6 +112,7 @@ export async function proxyRoutes(fastify: FastifyInstance) {
 	 * - GLTF: model/gltf+json
 	 * - FBX: application/octet-stream
 	 * - PNG/JPG/JPEG: image/png, image/jpeg（纹理图片）
+	 * - ZIP: 自动解压并提取模型文件（腾讯云混元 3D）
 	 */
 	fastify.get<{ Querystring: { url?: string } }>('/api/proxy/model', async (request, reply) => {
 		try {
@@ -156,13 +158,66 @@ export async function proxyRoutes(fastify: FastifyInstance) {
 
 			// 获取文件数据
 			const arrayBuffer = await response.arrayBuffer();
-			const buffer = Buffer.from(arrayBuffer);
+			let buffer = Buffer.from(arrayBuffer);
 
 			// 根据文件扩展名确定 Content-Type
-			const extension = modelUrl.split('.').pop()?.toLowerCase() || '';
+			let extension = modelUrl.split('.').pop()?.toLowerCase() || '';
 			let contentType = 'application/octet-stream'; // 默认二进制流
 
-			// 3D 模型格式
+			// ✅ 检查是否是 ZIP 文件（腾讯云混元 3D 返回的是 ZIP 文件）
+			const isZipFile = extension === 'zip' || buffer.toString('utf8', 0, 2) === 'PK';
+
+			if (isZipFile) {
+				logger.info({ msg: '检测到 ZIP 文件，开始解压', url: modelUrl });
+
+				try {
+					// 使用 adm-zip 解压 ZIP 文件
+					const zip = new AdmZip(buffer);
+					const zipEntries = zip.getEntries();
+
+					logger.info({
+						msg: 'ZIP 文件内容',
+						entries: zipEntries.map((entry) => entry.entryName),
+					});
+
+					// 查找模型文件（OBJ, GLB, GLTF）
+					const modelEntry = zipEntries.find((entry) => {
+						const entryExt = entry.entryName.split('.').pop()?.toLowerCase();
+						return entryExt === 'obj' || entryExt === 'glb' || entryExt === 'gltf';
+					});
+
+					if (!modelEntry) {
+						logger.error({
+							msg: 'ZIP 文件中未找到模型文件',
+							entries: zipEntries.map((e) => e.entryName),
+						});
+						return reply.status(400).send({ error: 'No model file found in ZIP archive' });
+					}
+
+					// 提取模型文件
+					const extractedBuffer = zip.readFile(modelEntry);
+					if (!extractedBuffer) {
+						logger.error({
+							msg: 'ZIP 文件提取失败',
+							fileName: modelEntry.entryName,
+						});
+						return reply.status(500).send({ error: 'Failed to read file from ZIP archive' });
+					}
+					buffer = Buffer.from(extractedBuffer);
+					extension = modelEntry.entryName.split('.').pop()?.toLowerCase() || '';
+
+					logger.info({
+						msg: '✅ 从 ZIP 中提取模型文件',
+						fileName: modelEntry.entryName,
+						size: `${buffer.length} bytes`,
+					});
+				} catch (error) {
+					logger.error({ msg: 'ZIP 解压失败', error });
+					return reply.status(500).send({ error: 'Failed to extract ZIP file' });
+				}
+			}
+
+			// 根据实际文件扩展名确定 Content-Type
 			if (extension === 'glb') {
 				contentType = 'model/gltf-binary';
 			} else if (extension === 'gltf') {

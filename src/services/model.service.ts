@@ -27,7 +27,22 @@ export async function getPublicModels(options?: {
 	offset?: number;
 	sortBy?: 'latest' | 'popular' | 'liked';
 }) {
-	return modelRepository.findPublicModels(options);
+	const { limit = 20, offset = 0 } = options || {};
+
+	// 获取模型列表（包含用户信息）
+	const items = await modelRepository.findPublicModels(options);
+
+	// 获取总数
+	const total = await modelRepository.countPublicModels();
+
+	// 计算是否还有更多
+	const hasMore = offset + items.length < total;
+
+	return {
+		items,
+		total,
+		hasMore,
+	};
 }
 
 export async function createModelForRequest(requestId: string, imageIndex: number) {
@@ -50,7 +65,7 @@ export async function createModelForRequest(requestId: string, imageIndex: numbe
 	const modelName = `${request.prompt.substring(0, 20)}_model`;
 	await generationRequestRepository.update(requestId, { selectedImageIndex: imageIndex });
 
-	// 创建 Model 记录
+	// 创建 Model 记录（默认为 PUBLIC）
 	const modelId = createId();
 	const model = await modelRepository.create({
 		id: modelId,
@@ -59,7 +74,8 @@ export async function createModelForRequest(requestId: string, imageIndex: numbe
 		sourceImageId: selectedImage.id,
 		name: modelName,
 		previewImageUrl: selectedImage.imageUrl,
-		visibility: 'PRIVATE',
+		visibility: 'PUBLIC',
+		publishedAt: new Date(), // 默认公开，设置发布时间
 	});
 
 	// 创建 ModelGenerationJob 记录
