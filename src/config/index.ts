@@ -67,6 +67,12 @@ const envSchema = z.object({
 	// Cookie domain 配置（跨端口共享 Cookie）
 	COOKIE_DOMAIN: z.string().default('192.168.88.100'),
 
+	// Cookie Secret（用于签名 Cookie，生产环境必须配置）
+	COOKIE_SECRET: z
+		.string()
+		.min(32, 'COOKIE_SECRET must be at least 32 characters for security')
+		.describe('用于签名 Cookie 的密钥，生产环境必须配置强密钥'),
+
 	// 服务器公开访问 URL（用于生成代理 URL）
 	// TODO: 后期优化 - 配置 CORS 后，可不再需要代理
 	PUBLIC_URL: z.string().optional(),
@@ -165,5 +171,6 @@ export const config = {
 	// Cookie 配置
 	cookie: {
 		domain: env.COOKIE_DOMAIN,
+		secret: env.COOKIE_SECRET,
 	},
 } as const;

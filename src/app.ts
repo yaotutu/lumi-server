@@ -6,6 +6,7 @@ import swagger from '@fastify/swagger';
 import scalar from '@scalar/fastify-api-reference';
 import Fastify from 'fastify';
 import { config } from './config/index.js';
+import { fastifyLoggerTransport } from './config/logger.config.js';
 import { authMiddleware } from './middleware/auth.middleware.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { routes } from './routes/index.js';
@@ -15,18 +16,16 @@ export async function buildApp() {
 		logger: config.isDevelopment
 			? {
 					level: config.logger.level,
-					transport: {
-						target: 'pino-pretty',
-						options: {
-							colorize: true,
-							translateTime: 'HH:MM:ss Z',
-							ignore: 'pid,hostname',
-							singleLine: true,
-						},
-					},
+					transport: fastifyLoggerTransport,
+					// 限制对象深度和属性数量，防止日志过长
+					depthLimit: 3,
+					edgeLimit: 20,
 				}
 			: {
 					level: config.logger.level,
+					// 限制对象深度和属性数量，防止日志过长
+					depthLimit: 3,
+					edgeLimit: 20,
 				},
 		requestIdLogLabel: 'reqId',
 		disableRequestLogging: false,
@@ -41,7 +40,7 @@ export async function buildApp() {
 
 	// Cookie 支持
 	await app.register(cookie, {
-		secret: process.env.COOKIE_SECRET || 'lumi-server-secret-key-change-in-production',
+		secret: config.cookie.secret,
 		parseOptions: {},
 	});
 

@@ -19,6 +19,7 @@ import {
 } from '@/repositories';
 import { sseConnectionManager } from '@/services/sse-connection-manager';
 import { storageService } from '@/services/storage.service';
+import { config } from '@/config/index.js';
 import { logger } from '@/utils/logger';
 import { redisClient } from '@/utils/redis-client';
 import { transformToProxyUrl } from '@/utils/url-transformer';
@@ -267,7 +268,7 @@ async function processImageJob(job: Job<ImageJobData>) {
 export function createImageWorker() {
 	const worker = new Worker<ImageJobData>('image-generation', processImageJob, {
 		connection: redisClient.getClient(),
-		concurrency: 5, // 并发处理 5 个任务
+		concurrency: config.queue.imageConcurrency, // 使用配置的并发数
 		limiter: {
 			max: 10, // 每 duration 时间内最多处理 10 个任务
 			duration: 60000, // 1 分钟
@@ -301,7 +302,10 @@ export function createImageWorker() {
 		});
 	});
 
-	logger.info({ msg: '🚀 Image Worker 启动成功' });
+	logger.info({
+		msg: '🚀 Image Worker 启动成功',
+		concurrency: config.queue.imageConcurrency,
+	});
 
 	return worker;
 }

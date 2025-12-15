@@ -5,9 +5,12 @@
 	"type": "module",
 	"main": "dist/server.js",
 	"scripts": {
-		"dev": "tsx watch src/server.ts",
+		"dev": "concurrently -n \"API,Worker\" -c \"cyan,magenta\" \"npm run dev:api\" \"npm run dev:workers\"",
+		"dev:api": "tsx watch src/server.ts",
+		"dev:workers": "tsx watch src/workers/start-workers.ts",
 		"build": "tsc",
 		"start": "node dist/server.js",
+		"start:workers": "node dist/workers/start-workers.js",
 		"test": "vitest",
 		"test:watch": "vitest --watch",
 		"test:ui": "vitest --ui",
@@ -20,7 +23,13 @@
 		"format": "biome format --write .",
 		"check": "biome check --write . && tsc --noEmit"
 	},
-	"keywords": ["fastify", "drizzle", "redis", "bullmq", "s3"],
+	"keywords": [
+		"fastify",
+		"drizzle",
+		"redis",
+		"bullmq",
+		"s3"
+	],
 	"author": "",
 	"license": "MIT",
 	"dependencies": {
@@ -52,6 +61,7 @@
 		"@types/adm-zip": "^0.5.7",
 		"@types/node": "^22.10.2",
 		"@types/supertest": "^6.0.3",
+		"concurrently": "^9.2.1",
 		"drizzle-kit": "^0.30.1",
 		"supertest": "^7.1.4",
 		"tsx": "^4.19.2",

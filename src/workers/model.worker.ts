@@ -9,6 +9,7 @@
  * - 处理失败和重试逻辑
  */
 
+import { config } from '@/config/index.js';
 import { createModel3DProvider } from '@/providers/model3d';
 import type { ModelJobData } from '@/queues';
 import { modelJobRepository, modelRepository } from '@/repositories';
@@ -271,7 +272,7 @@ async function processModelJob(job: Job<ModelJobData>) {
 export function createModelWorker() {
 	const worker = new Worker<ModelJobData>('model-generation', processModelJob, {
 		connection: redisClient.getClient(),
-		concurrency: 3, // 并发处理 3 个任务 (3D生成更耗时)
+		concurrency: config.queue.modelConcurrency, // 使用配置的并发数 (3D生成更耗时)
 		limiter: {
 			max: 5, // 每 duration 时间内最多处理 5 个任务
 			duration: 60000, // 1 分钟
@@ -305,7 +306,10 @@ export function createModelWorker() {
 		});
 	});
 
-	logger.info({ msg: '🚀 Model Worker 启动成功' });
+	logger.info({
+		msg: '🚀 Model Worker 启动成功',
+		concurrency: config.queue.modelConcurrency,
+	});
 
 	return worker;
 }

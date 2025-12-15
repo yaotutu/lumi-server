@@ -72,12 +72,28 @@ npm run db:push      # 推送到数据库
 
 ### 4. 启动开发服务器
 
-```bash
-# 终端 1: 启动 API 服务器
-npm run dev
+**推荐方式（一个命令启动所有服务）：**
 
-# 终端 2: 启动 Workers (图片/模型生成任务处理)
-tsx src/workers/start-workers.ts
+```bash
+npm run dev
+```
+
+这个命令会同时启动两个进程：
+- **API Server**（端口 3000）- 处理 HTTP 请求
+- **Worker Server** - 处理图片和 3D 模型生成任务
+
+两个进程的输出都会显示在同一个终端，带有不同颜色标记：
+- `[API]` - 青色，API 服务器的日志
+- `[Worker]` - 品红色，Worker 的日志
+
+**单独启动（可选）：**
+
+```bash
+# 终端 1: 只启动 API 服务器
+npm run dev:api
+
+# 终端 2: 只启动 Worker 服务器
+npm run dev:workers
 ```
 
 服务器将在 `http://localhost:3000` 启动。
@@ -85,17 +101,32 @@ tsx src/workers/start-workers.ts
 ## 可用命令
 
 ```bash
-npm run dev          # 启动开发服务器（热重载）
+# 开发环境
+npm run dev          # 启动开发服务器（API + Worker，一个终端）
+npm run dev:api      # 仅启动 API 服务器（热重载）
+npm run dev:workers  # 仅启动 Worker 服务器（热重载）
+
+# 生产环境
 npm run build        # 构建生产版本
-npm start            # 启动生产服务器
+npm start            # 启动生产 API 服务器
+npm run start:workers # 启动生产 Worker 服务器
+
+# 代码质量
 npm run lint         # 检查代码规范
 npm run lint:fix     # 自动修复代码规范
 npm run format       # 格式化代码
 npm run check        # 运行所有检查（lint + 类型检查）
+
+# 数据库
 npm run db:generate  # 生成数据库迁移
 npm run db:migrate   # 执行数据库迁移
 npm run db:push      # 推送 schema 到数据库
 npm run db:studio    # 打开 Drizzle Studio
+
+# 测试
+npm test             # 运行测试
+npm run test:watch   # 监听模式运行测试
+npm run test:ui      # 打开测试 UI
 ```
 
 ## API 端点

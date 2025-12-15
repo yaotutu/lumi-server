@@ -7,6 +7,8 @@
  * - 调用 Repository 层进行数据访问
  */
 
+import { db } from '@/db/drizzle';
+import { generatedImages, generationRequests, imageGenerationJobs } from '@/db/schema';
 import { modelQueue } from '@/queues';
 import {
 	generatedImageRepository,
@@ -53,7 +55,7 @@ export async function getRequestById(requestId: string) {
 /**
  * 创建新的生成请求
  *
- * 自动创建：
+ * 使用数据库事务确保原子性：
  * - 1 个 GenerationRequest（无状态）
  * - 4 个 GeneratedImage（imageStatus=PENDING，imageUrl=null，imagePrompt=风格变体）
  * - 4 个 ImageGenerationJob（status=PENDING）
@@ -101,49 +103,53 @@ export async function createRequest(userId: string, prompt: string) {
 		promptVariants = [trimmedPrompt, trimmedPrompt, trimmedPrompt, trimmedPrompt];
 	}
 
-	// 创建生成请求
+	// ✅ 使用数据库事务确保原子性
 	const requestId = createId();
-	const request = await generationRequestRepository.create({
-		id: requestId,
-		userId,
-		prompt: trimmedPrompt,
-		status: 'IMAGE_PENDING',
-		phase: 'IMAGE_GENERATION',
-	});
 
-	// 创建 4 个 GeneratedImage 记录（每个使用不同的提示词变体）
-	const imageData = Array.from({ length: 4 }, (_, index) => ({
-		id: createId(),
-		requestId,
-		index,
-		imageStatus: 'PENDING' as const,
-		imageUrl: null,
-		imagePrompt: promptVariants[index], // ✅ 分配对应的提示词变体
-	}));
-	const images = await generatedImageRepository.createMany(imageData);
+	await db.transaction(async (tx) => {
+		// 步骤 1: 创建 GenerationRequest
+		await tx.insert(generationRequests).values({
+			id: requestId,
+			userId,
+			prompt: trimmedPrompt,
+			status: 'IMAGE_PENDING',
+			phase: 'IMAGE_GENERATION',
+		});
 
-	// 创建 4 个 ImageGenerationJob 记录
-	const jobData = images.map((image) => ({
-		id: createId(),
-		imageId: image.id,
-		status: 'PENDING' as const,
-		priority: 0,
-		retryCount: 0,
-	}));
-	const jobs = await imageJobRepository.createMany(jobData);
+		// 步骤 2: 创建 4 个 GeneratedImage 记录（每个使用不同的提示词变体）
+		const imageRecords = Array.from({ length: 4 }, (_, index) => ({
+			id: createId(),
+			requestId,
+			index,
+			imageStatus: 'PENDING' as const,
+			imageUrl: null,
+			imagePrompt: promptVariants[index], // ✅ 分配对应的提示词变体
+		}));
+		await tx.insert(generatedImages).values(imageRecords);
 
-	logger.info({
-		msg: '✅ 创建生成请求',
-		requestId: request.id,
-		imageIds: images.map((i) => i.id).join(','),
-		jobIds: jobs.map((j) => j.id).join(','),
-		promptVariantsAssigned: images.map(
-			(i, idx) => `[${idx}]: ${i.imagePrompt?.substring(0, 50)}...`,
-		),
+		// 步骤 3: 创建 4 个 ImageGenerationJob 记录
+		const jobRecords = imageRecords.map((image) => ({
+			id: createId(),
+			imageId: image.id,
+			status: 'PENDING' as const,
+			priority: 0,
+			retryCount: 0,
+		}));
+		await tx.insert(imageGenerationJobs).values(jobRecords);
+
+		logger.info({
+			msg: '✅ 创建生成请求（事务）',
+			requestId,
+			imageIds: imageRecords.map((i) => i.id).join(','),
+			jobIds: jobRecords.map((j) => j.id).join(','),
+			promptVariantsAssigned: imageRecords.map(
+				(i, idx) => `[${idx}]: ${i.imagePrompt?.substring(0, 50)}...`,
+			),
+		});
 	});
 
 	// 查询完整的生成请求对象（包含关联数据）
-	return getRequestById(request.id);
+	return getRequestById(requestId);
 }
 
 /**

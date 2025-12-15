@@ -3,9 +3,16 @@ import { config } from './config/index.js';
 import { closeDatabase, testConnection } from './db/drizzle.js';
 import { logger } from './utils/logger.js';
 import { redisClient } from './utils/redis-client.js';
-import { createImageWorker } from './workers/image.worker.js';
-import { createModelWorker } from './workers/model.worker.js';
 
+/**
+ * API Server 启动入口
+ *
+ * 注意：此进程只运行 API 服务，不运行 Worker
+ * Worker 在独立进程中运行（src/workers/start-workers.ts）
+ *
+ * 开发环境：使用 npm run dev 会同时启动 API 和 Worker
+ * 生产环境：分别启动 npm start（API）和 npm run start:workers（Worker）
+ */
 async function start() {
 	try {
 		// 测试数据库连接
@@ -20,10 +27,7 @@ async function start() {
 			throw new Error('Redis connection failed');
 		}
 
-		// 启动 Workers (在应用启动之前)
-		logger.info('🚀 启动 BullMQ Workers...');
-		const imageWorker = createImageWorker();
-		const modelWorker = createModelWorker();
+		logger.info('✅ Database and Redis connected successfully');
 
 		// 构建应用
 		const app = await buildApp();
@@ -40,7 +44,7 @@ async function start() {
 				host: config.server.host,
 				env: config.env,
 			},
-			'🚀 Server started successfully',
+			'🚀 API Server started successfully',
 		);
 
 		// 优雅关闭
@@ -50,15 +54,10 @@ async function start() {
 				logger.info(`Received ${signal}, shutting down gracefully...`);
 
 				try {
-					// 关闭 Workers
-					await imageWorker.close();
-					await modelWorker.close();
-					logger.info('Workers closed successfully');
-
 					await app.close();
 					await redisClient.disconnect();
 					await closeDatabase();
-					logger.info('Server closed successfully');
+					logger.info('API Server closed successfully');
 					process.exit(0);
 				} catch (error) {
 					logger.error({ error }, 'Error during shutdown');
@@ -73,9 +72,9 @@ async function start() {
 				msg: error instanceof Error ? error.message : String(error),
 				stack: error instanceof Error ? error.stack : undefined,
 			},
-			'Failed to start server',
+			'Failed to start API server',
 		);
-		console.error('Server startup error:', error);
+		console.error('API server startup error:', error);
 		process.exit(1);
 	}
 }
