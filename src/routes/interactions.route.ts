@@ -1,9 +1,6 @@
 /**
- * Interaction Routes
- * 用户交互相关的 API 路由 (点赞/收藏)
- *
- * 重要：本文件完全按照 Next.js 项目的接口设计
- * 参考：/Users/yaotutu/Desktop/code/lumi-web-next/app/api/gallery/models/[id]/interactions/route.ts
+ * 用户交互相关的 API 路由
+ * 处理点赞、收藏等用户交互功能
  */
 
 import { batchInteractionsSchema } from '@/schemas/interaction.schema';
@@ -20,7 +17,7 @@ export async function interactionRoutes(fastify: FastifyInstance) {
 	 * GET /api/gallery/models/:id/interactions
 	 * 获取用户对该模型的交互状态
 	 *
-	 * Next.js 响应格式：
+	 * 响应格式：
 	 * - 未登录：{ isAuthenticated: false, interactions: [] }
 	 * - 已登录：{ isAuthenticated: true, interactions: ['LIKE'|'FAVORITE'], isLiked: boolean, isFavorited: boolean }
 	 */
@@ -49,7 +46,7 @@ export async function interactionRoutes(fastify: FastifyInstance) {
 				if (status.liked) interactions.push('LIKE');
 				if (status.favorited) interactions.push('FAVORITE');
 
-				// JSend success 格式（与 Next.js 一致）
+				// JSend success 格式
 				return reply.send(
 					success({
 						isAuthenticated: true,
@@ -71,7 +68,7 @@ export async function interactionRoutes(fastify: FastifyInstance) {
 	 *
 	 * 请求体：{ type: "LIKE" | "FAVORITE" }
 	 *
-	 * Next.js 响应格式：
+	 * 响应格式：
 	 * { isInteracted: boolean, type: string, likeCount: number, favoriteCount: number }
 	 */
 	fastify.post<{
@@ -124,7 +121,7 @@ export async function interactionRoutes(fastify: FastifyInstance) {
 				favoriteCount,
 			});
 
-			// JSend success 格式（与 Next.js 一致）
+			// JSend success 格式
 			return reply.send(
 				success({
 					isInteracted,
@@ -150,7 +147,7 @@ export async function interactionRoutes(fastify: FastifyInstance) {
 	 *
 	 * 请求体：{ modelIds: string[] }
 	 *
-	 * Next.js 响应格式：
+	 * 响应格式：
 	 * - 未登录：{ isAuthenticated: false, interactions: {} }
 	 * - 已登录：{ isAuthenticated: true, interactions: { [modelId]: ['LIKE'|'FAVORITE'] } }
 	 */
@@ -197,7 +194,7 @@ export async function interactionRoutes(fastify: FastifyInstance) {
 					interactionCount: Object.keys(interactions).length,
 				});
 
-				// JSend success 格式（与 Next.js 一致）
+				// JSend success 格式
 				return reply.send(
 					success({
 						isAuthenticated: true,

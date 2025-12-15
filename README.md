@@ -129,6 +129,31 @@ npm run test:watch   # 监听模式运行测试
 npm run test:ui      # 打开测试 UI
 ```
 
+## 维护脚本
+
+项目提供了一些实用脚本用于日常维护和部署：
+
+### 日常维护
+```bash
+# 清理孤立的 3D 模型（无关联生成请求）
+npx tsx scripts/maintenance/clean-orphaned-models.ts
+```
+
+### 部署配置
+```bash
+# 配置 S3 存储的 CORS 策略
+npx tsx scripts/deployment/configure-s3-cors.ts
+```
+
+### 历史脚本
+
+开发过程中使用的测试、检查、迁移等脚本已归档至 `scripts/archive/` 目录。这些脚本保留作为历史参考，详见 [脚本归档索引](./scripts/archive/README.md)。
+
+归档脚本分类：
+- **测试脚本** (4个) - API 测试、图片代理测试、模型下载测试等
+- **检查脚本** (8个) - 数据检查、模型状态检查、任务检查等
+- **迁移脚本** (6个) - 数据迁移、批量更新等一次性脚本
+
 ## API 端点
 
 ### 健康检查
@@ -202,6 +227,30 @@ npm run test:ui      # 打开测试 UI
 - 遵循 JSend 响应格式规范
 - 使用 Pino 记录日志
 - 使用 Zod 进行数据验证
+
+## 项目文档
+
+### 核心文档
+
+项目文档位于 `docs/` 目录，包含以下核心文档：
+
+- **[ARCHITECTURE.md](./docs/ARCHITECTURE.md)** - 系统架构设计（7层架构、数据流等）
+- **[COMPLETE_WORKFLOW.md](./docs/COMPLETE_WORKFLOW.md)** - 完整工作流程（图片生成、3D模型生成）
+- **[TASK_FLOW_ARCHITECTURE.md](./docs/TASK_FLOW_ARCHITECTURE.md)** - 任务流架构详解
+- **[AUTHENTICATION.md](./docs/AUTHENTICATION.md)** - 认证系统设计
+- **[MIGRATION_SUMMARY.md](./docs/MIGRATION_SUMMARY.md)** - Next.js 迁移总结
+- **[CLAUDE.md](./docs/CLAUDE.md)** - Claude 开发指南
+- **[PROJECT_OPTIMIZATION_SUGGESTIONS.md](./docs/PROJECT_OPTIMIZATION_SUGGESTIONS.md)** - 项目优化建议
+
+### 历史文档
+
+开发过程中的调试记录、优化报告、修复记录等文档已归档至 `docs/archive/` 目录。这些文档保留作为历史参考，详见 [归档索引](./docs/archive/README.md)。
+
+归档文档分类：
+- **调试记录** - 日志系统、MTL URL、ZIP 处理等调试过程
+- **优化报告** - 代码优化、日志优化、测试报告等
+- **修复记录** - Cookie、CORS、S3 等问题修复过程
+- **其他文档** - API 兼容性、测试结果、实施计划等
 
 ## 功能特性
 

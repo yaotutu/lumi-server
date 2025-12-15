@@ -10,6 +10,7 @@
  * - 处理失败和重试逻辑
  */
 
+import { config } from '@/config/index.js';
 import { createImageProvider } from '@/providers/image';
 import type { ImageJobData } from '@/queues';
 import {
@@ -19,7 +20,6 @@ import {
 } from '@/repositories';
 import { sseConnectionManager } from '@/services/sse-connection-manager';
 import { storageService } from '@/services/storage.service';
-import { config } from '@/config/index.js';
 import { logger } from '@/utils/logger';
 import { redisClient } from '@/utils/redis-client';
 import { transformToProxyUrl } from '@/utils/url-transformer';

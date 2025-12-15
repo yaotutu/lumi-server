@@ -1,8 +1,6 @@
 /**
- * Worker 状态路由
+ * Worker 状态查询 API
  * 返回图片和 3D 模型生成队列的运行状态
- *
- * 参考：/Users/yaotutu/Desktop/code/lumi-web-next/app/api/workers/status/route.ts
  */
 
 import { imageQueue, modelQueue } from '@/queues';
@@ -17,7 +15,7 @@ export async function workerRoutes(fastify: FastifyInstance) {
 	 * GET /api/workers/status
 	 * 返回所有 Worker 的运行状态
 	 *
-	 * Next.js 响应格式：
+	 * 响应格式：
 	 * {
 	 *   status: 'success',
 	 *   data: {
@@ -42,7 +40,7 @@ export async function workerRoutes(fastify: FastifyInstance) {
 				modelQueue.getActive(),
 			]);
 
-			// 构建与 Next.js 兼容的响应格式
+			// 构建响应格式
 			const imageStatus = {
 				isRunning: imageActive > 0 || imageWaiting > 0,
 				processingCount: imageActive,
@@ -65,7 +63,7 @@ export async function workerRoutes(fastify: FastifyInstance) {
 				},
 			};
 
-			// JSend success 格式（与 Next.js 一致）
+			// JSend success 格式
 			return reply.send(
 				success({
 					image: imageStatus,

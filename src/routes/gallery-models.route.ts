@@ -1,9 +1,6 @@
 /**
- * Model Routes
  * 模型管理相关的 API 路由
- *
- * 重要：本文件完全按照 Next.js 项目的接口设计
- * 参考：/Users/yaotutu/Desktop/code/lumi-web-next/app/api/gallery/models
+ * 处理模型的创建、查询、更新、删除等操作
  */
 
 import * as ModelService from '@/services/model.service';

@@ -1,5 +1,5 @@
 /**
- * 任务数据适配器 - 照搬 Next.js 的 task-adapter-client.ts 逻辑
+ * 任务数据适配器
  *
  * 职责：将后端的 GenerationRequest 数据转换为前端期望的格式
  */

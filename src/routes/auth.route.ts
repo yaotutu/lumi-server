@@ -18,7 +18,6 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 /**
  * Session Cookie 配置
- * 注意：Cookie 名称必须与 Next.js 保持一致
  */
 const COOKIE_NAME = 'auth-session';
 const COOKIE_MAX_AGE = 30 * 24 * 60 * 60; // 30天(秒)
@@ -149,7 +148,7 @@ export async function authRoutes(fastify: FastifyInstance) {
 	 * GET /api/auth/me
 	 * 获取当前用户信息
 	 *
-	 * Next.js 响应格式：
+	 * 响应格式：
 	 * {
 	 *   "status": "success",
 	 *   "data": {

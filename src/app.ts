@@ -127,7 +127,7 @@ export async function buildApp() {
 	// 注册路由
 	await app.register(routes);
 
-	// OpenAPI YAML 导出端点（与 Next.js 兼容）
+	// OpenAPI YAML 导出端点
 	// 必须在路由注册之后，确保 swagger 已生成完整的 OpenAPI 规范
 	app.get('/api/openapi', async (_request, reply) => {
 		try {

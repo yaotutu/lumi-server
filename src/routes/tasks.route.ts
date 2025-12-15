@@ -32,7 +32,7 @@ export async function taskRoutes(fastify: FastifyInstance) {
 	 * GET /api/tasks
 	 * 获取用户的生成请求列表
 	 *
-	 * Next.js 响应格式：
+	 * 响应格式：
 	 * {
 	 *   status: 'success',
 	 *   data: {
@@ -51,7 +51,7 @@ export async function taskRoutes(fastify: FastifyInstance) {
 
 			const requests = await GenerationRequestService.listRequests(userId, { limit });
 
-			// JSend success 格式 - 列表数据嵌套在 data.items 中（与 Next.js 一致）
+			// JSend success 格式 - 列表数据嵌套在 data.items 中
 			return reply.send(
 				success({
 					items: requests,
@@ -145,7 +145,7 @@ export async function taskRoutes(fastify: FastifyInstance) {
 				jobCount: imageJobs.length,
 			});
 
-			// JSend success 格式 - 直接返回 generationRequest（与 Next.js 一致）
+			// JSend success 格式 - 直接返回 generationRequest
 			return reply.status(201).send(success(generationRequest));
 		} catch (error) {
 			logger.error({ msg: '创建生成请求失败', error });

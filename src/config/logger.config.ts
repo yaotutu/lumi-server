@@ -13,9 +13,9 @@
  * 3. 在代码层面记录日志时控制字段选择（只记录必要字段）
  */
 
-import type { PrettyOptions } from 'pino-pretty';
-import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import type { PrettyOptions } from 'pino-pretty';
 
 // 获取当前文件的目录
 const __filename = fileURLToPath(import.meta.url);
