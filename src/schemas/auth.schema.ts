@@ -118,5 +118,13 @@ export const logoutSchema = {
 				message: { type: 'string' },
 			},
 		}),
+		500: {
+			description: '服务器错误',
+			type: 'object',
+			properties: {
+				status: { type: 'string' },
+				data: { type: 'object' },
+			},
+		},
 	},
 } as const;

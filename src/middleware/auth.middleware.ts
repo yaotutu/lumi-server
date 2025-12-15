@@ -32,13 +32,17 @@ interface UserSession {
 }
 
 /**
- * 验证结果
+ * 验证结果 - 使用判别联合类型确保类型安全
  */
-interface AuthResult {
-	isAuthenticated: boolean;
-	userId?: string;
-	email?: string;
-}
+type AuthResult =
+	| {
+			isAuthenticated: true;
+			userId: string;
+			email: string;
+	  }
+	| {
+			isAuthenticated: false;
+	  };
 
 /**
  * 验证用户会话并返回用户信息
@@ -131,8 +135,9 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
 
 	// 已登录，通过请求头传递用户信息给路由处理器
 	// 这样路由处理器可以直接读取，无需重复解析 Cookie
-	request.headers['x-user-id'] = authResult.userId!;
-	request.headers['x-user-email'] = authResult.email!;
+	// TypeScript 现在知道 authResult.userId 和 email 一定存在（因为 isAuthenticated 为 true）
+	request.headers['x-user-id'] = authResult.userId;
+	request.headers['x-user-email'] = authResult.email;
 
 	logger.debug({
 		msg: '认证通过',

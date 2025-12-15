@@ -33,6 +33,7 @@ export class ModelRepository {
 	 * 返回包含用户信息、请求信息、源图片信息和生成任务信息的模型数据
 	 * URL 已转换为代理 URL，前端可直接使用
 	 */
+	// biome-ignore lint/suspicious/noExplicitAny: 复杂的 join 查询返回类型，待定义专门的返回类型接口
 	async findById(id: string): Promise<any> {
 		const [result] = await db
 			.select({
@@ -151,6 +152,7 @@ export class ModelRepository {
 			limit?: number;
 			offset?: number;
 		} = {},
+		// biome-ignore lint/suspicious/noExplicitAny: 复杂的 join 查询返回类型，待定义专门的返回类型接口
 	): Promise<any[]> {
 		const { sortBy = 'latest', limit = 20, offset = 0 } = options;
 
@@ -193,6 +195,7 @@ export class ModelRepository {
 			);
 
 		// 根据排序方式获取结果
+		// biome-ignore lint/suspicious/noImplicitAnyLet: baseQuery 的返回类型由 Drizzle 推断，显式类型定义过于复杂
 		let results;
 		if (sortBy === 'popular') {
 			results = await baseQuery.orderBy(desc(models.viewCount)).limit(limit).offset(offset);

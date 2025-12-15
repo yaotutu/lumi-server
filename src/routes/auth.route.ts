@@ -140,7 +140,8 @@ export async function authRoutes(fastify: FastifyInstance) {
 			return reply.send(success({ message: '登出成功' }));
 		} catch (error) {
 			logger.error({ msg: '登出失败', error });
-			return (reply as any).code(500).send(fail('登出失败'));
+			reply.code(500);
+			return reply.send(fail('登出失败'));
 		}
 	});
 

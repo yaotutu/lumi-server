@@ -31,7 +31,7 @@ export async function downloadAndUploadModel(
 		msg: '📥 开始下载并上传 3D 模型',
 		modelId,
 		format,
-		remoteUrlPreview: remoteUrl.substring(0, 80) + '...',
+		remoteUrlPreview: `${remoteUrl.substring(0, 80)}...`,
 	});
 
 	try {
@@ -447,7 +447,7 @@ export async function downloadAndUploadPreviewImage(
 	logger.info({
 		msg: '📥 开始下载并上传预览图',
 		modelId,
-		remoteUrlPreview: remoteUrl.substring(0, 80) + '...',
+		remoteUrlPreview: `${remoteUrl.substring(0, 80)}...`,
 	});
 
 	try {

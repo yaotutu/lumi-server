@@ -226,11 +226,14 @@ export class GenerationRequestRepository {
 		// 4. 按 requestId 分组并转换 URL
 		const imagesMap = new Map<string, typeof allImages>();
 		for (const img of allImages) {
-			if (!imagesMap.has(img.requestId)) {
-				imagesMap.set(img.requestId, []);
+			// 获取或创建数组
+			let imagesList = imagesMap.get(img.requestId);
+			if (!imagesList) {
+				imagesList = [];
+				imagesMap.set(img.requestId, imagesList);
 			}
 			// 转换图片 URL
-			imagesMap.get(img.requestId)!.push({
+			imagesList.push({
 				...img,
 				imageUrl: transformToProxyUrl(img.imageUrl, 'image'),
 			});

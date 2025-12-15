@@ -50,7 +50,7 @@ module.exports = (opts) => {
 
 			// 截断错误消息（> 120 字符）- 控制台显示用
 			err: (err) => {
-				if (err && err.message) {
+				if (err?.message) {
 					return truncate(String(err.message), 120);
 				}
 				return truncate(String(err), 120);
@@ -64,7 +64,8 @@ module.exports = (opts) => {
 				if (obj && typeof obj === 'object') {
 					if (obj.status && obj.id) {
 						return `Job:${obj.id.substring(0, 8)}..[${obj.status}]`;
-					} else if (obj.status) {
+					}
+					if (obj.status) {
 						return `Job[${obj.status}]`;
 					}
 					return truncate(JSON.stringify(obj), 60);

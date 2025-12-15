@@ -60,7 +60,8 @@ export async function taskRoutes(fastify: FastifyInstance) {
 			);
 		} catch (error) {
 			logger.error({ msg: '获取生成请求列表失败', error });
-			return (reply as any).code(500).send(fail('获取生成请求列表失败'));
+			reply.code(500);
+			return reply.send(fail('获取生成请求列表失败'));
 		}
 	});
 
@@ -402,7 +403,9 @@ export async function taskRoutes(fastify: FastifyInstance) {
 			// 2. 设置心跳定时器（每 30 秒）
 			heartbeatInterval = setInterval(() => {
 				try {
-					sseConnectionManager.sendHeartbeat(connection!);
+					if (connection) {
+						sseConnectionManager.sendHeartbeat(connection);
+					}
 				} catch (error) {
 					logger.error({ msg: '心跳发送失败，清理连接', error, taskId });
 					clearInterval(heartbeatInterval);

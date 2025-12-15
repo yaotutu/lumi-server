@@ -64,8 +64,8 @@ async function processImageJob(job: Job<ImageJobData>) {
 			imageStatus: imageData.imageStatus,
 			jobStatus: imageJobData.status,
 			hasOptimizedPrompt: !!imageData.imagePrompt,
-			originalPrompt: prompt.substring(0, 50) + '...',
-			optimizedPrompt: optimizedPrompt.substring(0, 50) + '...',
+			originalPrompt: `${prompt.substring(0, 50)}...`,
+			optimizedPrompt: `${optimizedPrompt.substring(0, 50)}...`,
 		});
 
 		// 更新 Job 状态为 RUNNING
@@ -105,7 +105,7 @@ async function processImageJob(job: Job<ImageJobData>) {
 			provider: imageProvider.getName(),
 			imageIndex,
 			usingOptimizedPrompt: !!imageData.imagePrompt,
-			promptPreview: optimizedPrompt.substring(0, 100) + '...',
+			promptPreview: `${optimizedPrompt.substring(0, 100)}...`,
 		});
 
 		// ✅ 使用优化后的提示词生成图片

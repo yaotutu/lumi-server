@@ -7,18 +7,21 @@
 /**
  * 将 GenerationRequest 适配为前端期望的格式
  */
+// biome-ignore lint/suspicious/noExplicitAny: 前后端数据格式适配层，待定义统一的类型接口
 export function adaptGenerationRequest(request: any): any {
 	// 直接使用后端的 status 和 phase
 	const status =
 		request.status || deriveStatusFromPhase(request.phase, request.images, request.model);
 
 	// 适配 images 字段：将 imageUrl 映射为 url（向后兼容）
+	// biome-ignore lint/suspicious/noExplicitAny: 图片数据结构由数据库返回，类型待统一定义
 	const adaptedImages = request.images.map((img: any) => ({
 		...img,
 		url: img.imageUrl, // 添加兼容字段
 	}));
 
 	// 适配 model 字段（1:1 关系）
+	// biome-ignore lint/suspicious/noExplicitAny: 模型数据结构复杂，待定义统一的类型接口
 	let adaptedModels: any[] = [];
 	let modelGenerationStartedAt: Date | null = null;
 
@@ -84,7 +87,9 @@ export function adaptGenerationRequest(request: any): any {
  */
 function deriveStatusFromPhase(
 	phase: string | null | undefined,
+	// biome-ignore lint/suspicious/noExplicitAny: 内部辅助函数，处理动态数据结构
 	images: any[],
+	// biome-ignore lint/suspicious/noExplicitAny: 内部辅助函数，处理动态数据结构
 	model: any,
 ): string {
 	// 如果有明确的 phase，基于 phase 推导
