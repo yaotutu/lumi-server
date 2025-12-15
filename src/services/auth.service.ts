@@ -5,8 +5,11 @@
  * - 验证码生成和验证
  * - 用户登录/登出
  * - Session 管理
+ *
+ * @note 临时方案：验证码固定为 "0000"，待对接独立邮件系统
  */
 
+// TODO: 后期对接邮件系统后会重新使用
 import * as emailVerificationCodeRepository from '@/repositories/email-verification-code.repository';
 import * as userRepository from '@/repositories/user.repository';
 import { ValidationError } from '@/utils/errors';
@@ -15,9 +18,14 @@ import { createId } from '@paralleldrive/cuid2';
 
 /**
  * 生成4位数字验证码
+ *
+ * @deprecated 临时写死为 "0000"，待对接独立邮件系统后移除
  */
 function generateVerificationCode(): string {
-	return Math.floor(1000 + Math.random() * 9000).toString();
+	// 临时方案：写死验证码为 "0000"
+	// TODO: 后期对接独立邮件系统后恢复随机生成
+	return '0000';
+	// return Math.floor(1000 + Math.random() * 9000).toString();
 }
 
 /**
@@ -25,6 +33,9 @@ function generateVerificationCode(): string {
  *
  * @param email 邮箱地址
  * @returns 验证码(开发环境返回,生产环境不返回)
+ *
+ * @note 临时方案：验证码固定为 "0000"，不发送邮件
+ * @todo 后期对接独立邮件系统
  */
 export async function sendVerificationCode(email: string): Promise<{ code?: string }> {
 	// 验证邮箱格式
@@ -33,36 +44,21 @@ export async function sendVerificationCode(email: string): Promise<{ code?: stri
 		throw new ValidationError('邮箱格式不正确');
 	}
 
-	// 删除该邮箱的所有旧验证码
-	await emailVerificationCodeRepository.deleteByEmail(email);
+	// 临时方案：不再保存验证码到数据库
+	// 固定验证码为 "0000"
+	const code = '0000';
 
-	// 生成验证码
-	const code = generateVerificationCode();
-	const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10分钟过期
-
-	// 保存验证码
-	await emailVerificationCodeRepository.create({
-		id: createId(),
-		email,
-		code,
-		expiresAt,
-	});
-
-	// TODO: 发送邮件
+	// TODO: 后期对接独立邮件系统后，发送真实验证码邮件
 	// await sendEmail(email, '登录验证码', `您的验证码是: ${code}, 10分钟内有效`);
 
 	logger.info({
-		msg: '✅ 验证码已生成',
+		msg: '✅ 验证码已生成（临时固定为0000）',
 		email,
-		code: process.env.NODE_ENV === 'development' ? code : '****',
+		code,
 	});
 
-	// 开发环境返回验证码(方便测试)
-	if (process.env.NODE_ENV === 'development') {
-		return { code };
-	}
-
-	return {};
+	// 始终返回验证码（因为是固定的）
+	return { code };
 }
 
 /**
@@ -71,14 +67,21 @@ export async function sendVerificationCode(email: string): Promise<{ code?: stri
  * @param email 邮箱地址
  * @param code 验证码
  * @returns 用户信息
+ *
+ * @note 临时方案：验证码固定为 "0000"，不验证数据库
+ * @todo 后期对接独立邮件系统后恢复数据库验证
  */
 export async function verifyCodeAndLogin(email: string, code: string) {
-	// 验证验证码
-	const verificationCode = await emailVerificationCodeRepository.findValidCode(email, code);
-
-	if (!verificationCode) {
+	// 临时方案：验证码固定为 "0000"
+	if (code !== '0000') {
 		throw new ValidationError('验证码无效或已过期');
 	}
+
+	// TODO: 后期对接独立邮件系统后，恢复数据库验证逻辑
+	// const verificationCode = await emailVerificationCodeRepository.findValidCode(email, code);
+	// if (!verificationCode) {
+	// 	throw new ValidationError('验证码无效或已过期');
+	// }
 
 	// 查找或创建用户
 	let user = await userRepository.findByEmail(email);
@@ -98,11 +101,8 @@ export async function verifyCodeAndLogin(email: string, code: string) {
 		});
 	}
 
-	// 删除已使用的验证码
-	await emailVerificationCodeRepository.deleteByEmail(email);
-
 	logger.info({
-		msg: '✅ 用户登录成功',
+		msg: '✅ 用户登录成功（使用固定验证码0000）',
 		userId: user.id,
 		email: user.email,
 	});

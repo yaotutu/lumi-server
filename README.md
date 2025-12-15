@@ -145,15 +145,6 @@ npx tsx scripts/maintenance/clean-orphaned-models.ts
 npx tsx scripts/deployment/configure-s3-cors.ts
 ```
 
-### 历史脚本
-
-开发过程中使用的测试、检查、迁移等脚本已归档至 `scripts/archive/` 目录。这些脚本保留作为历史参考，详见 [脚本归档索引](./scripts/archive/README.md)。
-
-归档脚本分类：
-- **测试脚本** (4个) - API 测试、图片代理测试、模型下载测试等
-- **检查脚本** (8个) - 数据检查、模型状态检查、任务检查等
-- **迁移脚本** (6个) - 数据迁移、批量更新等一次性脚本
-
 ## API 端点
 
 ### 健康检查
@@ -241,16 +232,6 @@ npx tsx scripts/deployment/configure-s3-cors.ts
 - **[MIGRATION_SUMMARY.md](./docs/MIGRATION_SUMMARY.md)** - Next.js 迁移总结
 - **[CLAUDE.md](./docs/CLAUDE.md)** - Claude 开发指南
 - **[PROJECT_OPTIMIZATION_SUGGESTIONS.md](./docs/PROJECT_OPTIMIZATION_SUGGESTIONS.md)** - 项目优化建议
-
-### 历史文档
-
-开发过程中的调试记录、优化报告、修复记录等文档已归档至 `docs/archive/` 目录。这些文档保留作为历史参考，详见 [归档索引](./docs/archive/README.md)。
-
-归档文档分类：
-- **调试记录** - 日志系统、MTL URL、ZIP 处理等调试过程
-- **优化报告** - 代码优化、日志优化、测试报告等
-- **修复记录** - Cookie、CORS、S3 等问题修复过程
-- **其他文档** - API 兼容性、测试结果、实施计划等
 
 ## 功能特性
 
