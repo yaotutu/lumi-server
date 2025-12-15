@@ -3,11 +3,11 @@
  * 处理点赞、收藏等用户交互功能
  */
 
+import type { FastifyInstance } from 'fastify';
 import { batchInteractionsSchema } from '@/schemas/interaction.schema';
 import * as InteractionService from '@/services/interaction.service';
 import { logger } from '@/utils/logger';
 import { fail, success } from '@/utils/response';
-import type { FastifyInstance } from 'fastify';
 
 /**
  * 注册交互路由
@@ -95,7 +95,7 @@ export async function interactionRoutes(fastify: FastifyInstance) {
 				isInteracted = result.liked;
 				likeCount = result.likeCount;
 				// 获取最新的 favoriteCount
-				const model = await InteractionService.getUserInteractionStatus(userId, modelId);
+				const _model = await InteractionService.getUserInteractionStatus(userId, modelId);
 				const modelData = await import('@/repositories').then((m) =>
 					m.modelRepository.findById(modelId),
 				);

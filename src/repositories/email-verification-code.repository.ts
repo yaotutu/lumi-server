@@ -2,13 +2,13 @@
  * EmailVerificationCode Repository - 邮箱验证码数据访问层
  */
 
+import { and, desc, eq, gt } from 'drizzle-orm';
 import { db } from '@/db/drizzle';
 import {
 	type EmailVerificationCode,
-	type NewEmailVerificationCode,
 	emailVerificationCodes,
+	type NewEmailVerificationCode,
 } from '@/db/schema';
-import { and, desc, eq, gt } from 'drizzle-orm';
 
 /**
  * 查找有效的验证码

@@ -11,8 +11,8 @@
  * - 支持一个 taskId 对应多个客户端连接（例如多个标签页）
  */
 
-import { logger } from '@/utils/logger.js';
 import type { FastifyReply } from 'fastify';
+import { logger } from '@/utils/logger.js';
 
 /**
  * SSE 事件类型

@@ -3,10 +3,10 @@
  * 处理模型的创建、查询、更新、删除等操作
  */
 
+import type { FastifyInstance } from 'fastify';
 import * as ModelService from '@/services/model.service';
 import { logger } from '@/utils/logger';
 import { fail, success } from '@/utils/response';
-import type { FastifyInstance } from 'fastify';
 
 /**
  * 注册模型管理路由

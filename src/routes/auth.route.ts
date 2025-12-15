@@ -8,13 +8,13 @@
  * - GET /api/auth/me - 获取当前用户信息
  */
 
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { config } from '@/config/index.js';
-import { getMeSchema, logoutSchema, sendCodeSchema, verifyCodeSchema } from '@/schemas/auth.schema';
+import { getMeSchema, logoutSchema } from '@/schemas/auth.schema';
 import * as AuthService from '@/services/auth.service';
 import { ValidationError } from '@/utils/errors';
 import { logger } from '@/utils/logger';
 import { fail, success } from '@/utils/response';
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 /**
  * Session Cookie 配置

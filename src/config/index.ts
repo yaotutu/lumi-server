@@ -28,8 +28,8 @@ const envSchema = z.object({
 	S3_BUCKET: z.string().min(1, 'S3_BUCKET is required'),
 	S3_FORCE_PATH_STYLE: z
 		.string()
-		.transform((val) => val === 'true')
-		.default('false'),
+		.default('false')
+		.transform((val) => val === 'true'),
 
 	// 阿里云文生图
 	ALIYUN_IMAGE_API_KEY: z.string().optional(),

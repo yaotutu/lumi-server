@@ -1,15 +1,15 @@
+import { and, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import { db } from '@/db/drizzle';
 import {
-	type Model,
-	type NewModel,
 	generatedImages,
 	generationRequests,
+	type Model,
 	modelGenerationJobs,
 	models,
+	type NewModel,
 	users,
 } from '@/db/schema';
 import { transformToProxyUrl } from '@/utils/url-transformer';
-import { and, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 
 /**
  * Model Repository
@@ -147,11 +147,7 @@ export class ModelRepository {
 	 * URL 已转换为代理 URL，前端可直接使用
 	 */
 	async findPublicModels(
-		options: {
-			sortBy?: 'latest' | 'popular' | 'liked';
-			limit?: number;
-			offset?: number;
-		} = {},
+		options: { sortBy?: 'latest' | 'popular' | 'liked'; limit?: number; offset?: number } = {},
 		// biome-ignore lint/suspicious/noExplicitAny: 复杂的 join 查询返回类型，待定义专门的返回类型接口
 	): Promise<any[]> {
 		const { sortBy = 'latest', limit = 20, offset = 0 } = options;

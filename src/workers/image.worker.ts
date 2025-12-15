@@ -10,6 +10,7 @@
  * - 处理失败和重试逻辑
  */
 
+import { type Job, Worker } from 'bullmq';
 import { config } from '@/config/index.js';
 import { createImageProvider } from '@/providers/image';
 import type { ImageJobData } from '@/queues';
@@ -23,7 +24,6 @@ import { storageService } from '@/services/storage.service';
 import { logger } from '@/utils/logger';
 import { redisClient } from '@/utils/redis-client';
 import { transformToProxyUrl } from '@/utils/url-transformer';
-import { type Job, Worker } from 'bullmq';
 
 /**
  * 处理图片生成任务

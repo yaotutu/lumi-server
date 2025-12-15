@@ -3,13 +3,13 @@
  * 健康检查和系统状态相关的路由
  */
 
+import { sql } from 'drizzle-orm';
+import type { FastifyInstance } from 'fastify';
 import { db } from '@/db/drizzle';
 import { createSuccessResponseSchema } from '@/schemas/common.schema';
 import { logger } from '@/utils/logger';
 import { redisClient } from '@/utils/redis-client';
 import { fail, success } from '@/utils/response';
-import { sql } from 'drizzle-orm';
-import type { FastifyInstance } from 'fastify';
 
 /**
  * 注册健康检查路由

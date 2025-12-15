@@ -7,8 +7,8 @@
  * - 使用 OpenAI SDK 实现通用逻辑
  */
 
-import { logger } from '@/utils/logger';
 import OpenAI from 'openai';
+import { logger } from '@/utils/logger';
 import type { ChatCompletionRequest, LLMConfig, LLMProvider } from './types';
 
 /**

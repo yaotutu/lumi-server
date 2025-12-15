@@ -14,9 +14,9 @@
  * ```
  */
 
+import type { Worker } from 'bullmq';
 import { logger } from '@/utils/logger';
 import { redisClient } from '@/utils/redis-client';
-import type { Worker } from 'bullmq';
 import { createImageWorker } from './image.worker.js';
 import { createModelWorker } from './model.worker.js';
 

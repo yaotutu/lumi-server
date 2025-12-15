@@ -9,9 +9,9 @@
  * - 任务状态跟踪
  */
 
+import { ai3d } from 'tencentcloud-sdk-nodejs-ai3d';
 import { config } from '@/config/index';
 import { logger } from '@/utils/logger';
-import { ai3d } from 'tencentcloud-sdk-nodejs-ai3d';
 import { BaseModel3DProvider } from '../base';
 import type { ModelJobResponse, ModelTaskStatusResponse, SubmitModelJobParams } from '../types';
 

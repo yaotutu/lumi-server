@@ -140,7 +140,7 @@ export async function buildApp() {
 					'Cache-Control': 'no-cache', // 开发环境不缓存，方便调试
 				})
 				.send(yaml);
-		} catch (error) {
+		} catch (_error) {
 			return reply.status(500).send({
 				success: false,
 				error: '无法生成 OpenAPI 规范文件',

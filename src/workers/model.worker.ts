@@ -9,6 +9,7 @@
  * - 处理失败和重试逻辑
  */
 
+import { type Job, Worker } from 'bullmq';
 import { config } from '@/config/index.js';
 import { createModel3DProvider } from '@/providers/model3d';
 import type { ModelJobData } from '@/queues';
@@ -18,7 +19,6 @@ import { logger } from '@/utils/logger';
 import { downloadAndUploadModel, downloadAndUploadPreviewImage } from '@/utils/model-storage.js';
 import { redisClient } from '@/utils/redis-client';
 import { transformToProxyUrl } from '@/utils/url-transformer';
-import { type Job, Worker } from 'bullmq';
 
 /**
  * 处理 3D 模型生成任务

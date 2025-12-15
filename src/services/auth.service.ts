@@ -9,19 +9,17 @@
  * @note 临时方案：验证码固定为 "0000"，待对接独立邮件系统
  */
 
-// TODO: 后期对接邮件系统后会重新使用
-import * as emailVerificationCodeRepository from '@/repositories/email-verification-code.repository';
+import { createId } from '@paralleldrive/cuid2';
 import * as userRepository from '@/repositories/user.repository';
 import { ValidationError } from '@/utils/errors';
 import { logger } from '@/utils/logger';
-import { createId } from '@paralleldrive/cuid2';
 
 /**
  * 生成4位数字验证码
  *
  * @deprecated 临时写死为 "0000"，待对接独立邮件系统后移除
  */
-function generateVerificationCode(): string {
+function _generateVerificationCode(): string {
 	// 临时方案：写死验证码为 "0000"
 	// TODO: 后期对接独立邮件系统后恢复随机生成
 	return '0000';

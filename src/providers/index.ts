@@ -9,9 +9,7 @@
 
 // 图片生成 Provider
 export * from './image';
-
-// 3D 模型生成 Provider
-export * from './model3d';
-
 // LLM Provider
 export * from './llm';
+// 3D 模型生成 Provider
+export * from './model3d';

@@ -3,9 +3,9 @@
  * 返回图片和 3D 模型生成队列的运行状态
  */
 
+import type { FastifyInstance } from 'fastify';
 import { imageQueue, modelQueue } from '@/queues';
 import { success } from '@/utils/response';
-import type { FastifyInstance } from 'fastify';
 
 /**
  * 注册 Worker 状态路由
@@ -70,7 +70,7 @@ export async function workerRoutes(fastify: FastifyInstance) {
 					model3d: model3dStatus,
 				}),
 			);
-		} catch (error) {
+		} catch (_error) {
 			// 如果队列未初始化，返回默认状态
 			return reply.send(
 				success({

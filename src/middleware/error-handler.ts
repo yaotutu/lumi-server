@@ -15,7 +15,7 @@ export async function errorHandler(
 		log.warn({ err, path: request.url }, 'Validation error');
 		reply.status(400).send(
 			fail('Validation failed', 'VALIDATION_ERROR', {
-				errors: err.errors,
+				errors: err.issues,
 			}),
 		);
 		return;

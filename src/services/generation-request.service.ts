@@ -7,19 +7,18 @@
  * - 调用 Repository 层进行数据访问
  */
 
+import { createId } from '@paralleldrive/cuid2';
 import { db } from '@/db/drizzle';
 import { generatedImages, generationRequests, imageGenerationJobs } from '@/db/schema';
 import { modelQueue } from '@/queues';
 import {
 	generatedImageRepository,
 	generationRequestRepository,
-	imageJobRepository,
 	modelJobRepository,
 	modelRepository,
 } from '@/repositories';
 import { NotFoundError, ValidationError } from '@/utils/errors';
 import { logger } from '@/utils/logger';
-import { createId } from '@paralleldrive/cuid2';
 
 /**
  * 获取生成请求列表
@@ -375,7 +374,7 @@ export async function submitPrintTask(requestId: string, userId: string) {
  */
 export async function getPrintStatus(requestId: string) {
 	// 验证生成请求存在
-	const request = await getRequestById(requestId);
+	const _request = await getRequestById(requestId);
 
 	// 获取模型
 	const model = await modelRepository.findByRequestId(requestId);

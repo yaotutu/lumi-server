@@ -3,8 +3,8 @@
  * 我们先写测试，再实现功能
  */
 
-import { storageService } from '@/services/storage.service.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { storageService } from '@/services/storage.service.js';
 
 describe('存储服务 - TDD演示', () => {
 	beforeEach(() => {

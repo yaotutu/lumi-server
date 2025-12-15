@@ -1,3 +1,4 @@
+import { createId } from '@paralleldrive/cuid2';
 import type { GeneratedImage } from '@/db/schema';
 /**
  * Model 服务层
@@ -10,7 +11,6 @@ import {
 } from '@/repositories';
 import { ForbiddenError, InvalidStateError, NotFoundError, ValidationError } from '@/utils/errors';
 import { logger } from '@/utils/logger';
-import { createId } from '@paralleldrive/cuid2';
 
 export async function getModelById(modelId: string) {
 	const model = await modelRepository.findById(modelId);
@@ -27,7 +27,7 @@ export async function getPublicModels(options?: {
 	offset?: number;
 	sortBy?: 'latest' | 'popular' | 'liked';
 }) {
-	const { limit = 20, offset = 0 } = options || {};
+	const { offset = 0 } = options || {};
 
 	// 获取模型列表（包含用户信息）
 	const items = await modelRepository.findPublicModels(options);

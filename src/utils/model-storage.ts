@@ -8,9 +8,9 @@
  * - 返回可访问的 S3 URL
  */
 
+import AdmZip from 'adm-zip';
 import { storageService } from '@/services/storage.service.js';
 import { logger } from '@/utils/logger.js';
-import AdmZip from 'adm-zip';
 
 /**
  * 从远程 URL 下载 3D 模型并上传到存储服务

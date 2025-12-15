@@ -14,9 +14,9 @@
  * - 基于 API_ROUTES 配置自动判断是否需要认证
  */
 
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import { isProtectedRoute } from '@/config/api-routes';
 import { logger } from '@/utils/logger';
-import type { FastifyReply, FastifyRequest } from 'fastify';
 
 /**
  * Cookie 名称

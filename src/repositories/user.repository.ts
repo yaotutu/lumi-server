@@ -2,9 +2,9 @@
  * User Repository - 用户数据访问层
  */
 
+import { eq } from 'drizzle-orm';
 import { db } from '@/db/drizzle';
 import { type NewUser, type User, users } from '@/db/schema';
-import { eq } from 'drizzle-orm';
 
 /**
  * 根据邮箱查找用户

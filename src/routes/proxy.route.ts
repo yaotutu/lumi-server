@@ -9,9 +9,9 @@
  * 4. 设置正确的 Content-Type 和 CORS 头
  */
 
-import { logger } from '@/utils/logger';
 import AdmZip from 'adm-zip';
 import type { FastifyInstance } from 'fastify';
+import { logger } from '@/utils/logger';
 
 /**
  * 注册代理路由

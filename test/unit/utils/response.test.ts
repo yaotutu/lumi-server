@@ -3,8 +3,8 @@
  * 这是我们按照 TDD 原则写的第一个测试
  */
 
-import { error, fail, success } from '@/utils/response.js';
 import { describe, expect, it } from 'vitest';
+import { error, fail, success } from '@/utils/response.js';
 
 describe('Response Utils', () => {
 	// 测试成功响应

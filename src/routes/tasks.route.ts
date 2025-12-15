@@ -3,6 +3,7 @@
  * 生成请求相关的 API 路由
  */
 
+import type { FastifyInstance } from 'fastify';
 import { config } from '@/config/index.js';
 import { imageQueue } from '@/queues';
 import {
@@ -22,7 +23,6 @@ import { logger } from '@/utils/logger';
 import { getUserIdFromRequest } from '@/utils/request-auth';
 import { fail, success } from '@/utils/response';
 import { adaptGenerationRequest } from '@/utils/task-adapter';
-import type { FastifyInstance } from 'fastify';
 
 /**
  * 注册生成请求路由

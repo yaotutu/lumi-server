@@ -1,10 +1,10 @@
+import { and, eq, lt, or } from 'drizzle-orm';
 import { db } from '@/db/drizzle';
 import {
 	type ModelGenerationJob,
-	type NewModelGenerationJob,
 	modelGenerationJobs,
+	type NewModelGenerationJob,
 } from '@/db/schema';
-import { and, eq, lt, or } from 'drizzle-orm';
 
 /**
  * ModelGenerationJob Repository

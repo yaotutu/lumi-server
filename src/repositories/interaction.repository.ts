@@ -1,6 +1,6 @@
-import { db } from '@/db/drizzle';
-import { type ModelInteraction, type NewModelInteraction, modelInteractions } from '@/db/schema';
 import { and, eq, inArray } from 'drizzle-orm';
+import { db } from '@/db/drizzle';
+import { type ModelInteraction, modelInteractions, type NewModelInteraction } from '@/db/schema';
 
 /**
  * ModelInteraction Repository

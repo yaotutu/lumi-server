@@ -3,21 +3,16 @@
  * 学习如何测试自定义错误类
  */
 
+import { describe, expect, it } from 'vitest';
 import {
 	AppError,
 	ConflictError,
-	DatabaseError,
 	ExternalAPIError,
 	ForbiddenError,
-	InternalServerError,
-	InvalidStateError,
 	NotFoundError,
-	QueueFullError,
-	ServiceUnavailableError,
 	UnauthorizedError,
 	ValidationError,
 } from '@/utils/errors.js';
-import { describe, expect, it } from 'vitest';
 
 describe('错误类测试', () => {
 	// 测试基础错误类

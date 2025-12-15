@@ -1,15 +1,15 @@
+import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import { db } from '@/db/drizzle';
 import {
 	type GenerationRequest,
-	type NewGenerationRequest,
 	generatedImages,
 	generationRequests,
 	imageGenerationJobs,
 	modelGenerationJobs,
 	models,
+	type NewGenerationRequest,
 } from '@/db/schema';
 import { transformToProxyUrl } from '@/utils/url-transformer';
-import { and, asc, desc, eq, sql } from 'drizzle-orm';
 
 /**
  * GenerationRequest Repository
