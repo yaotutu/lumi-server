@@ -48,6 +48,8 @@ export async function buildApp() {
 	await app.register(cors, {
 		origin: config.cors.origins, // 使用具体的前端域名列表
 		credentials: true,
+		methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], // 明确允许的 HTTP 方法
+		allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id'], // 允许的请求头
 	});
 
 	// 限流

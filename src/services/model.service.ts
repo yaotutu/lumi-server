@@ -11,6 +11,7 @@ import {
 } from '@/repositories';
 import { ForbiddenError, InvalidStateError, NotFoundError, ValidationError } from '@/utils/errors';
 import { logger } from '@/utils/logger';
+import { storageService } from './storage.service.js';
 
 export async function getModelById(modelId: string) {
 	const model = await modelRepository.findById(modelId);
@@ -117,10 +118,58 @@ export async function unpublishModel(modelId: string, userId: string) {
 	return modelRepository.updateVisibility(modelId, 'PRIVATE');
 }
 
+/**
+ * 从 S3 URL 提取 key
+ * 支持多种 S3 URL 格式
+ * @param url S3 完整 URL
+ * @returns S3 key（如 models/xxx/model.obj 或 images/xxx/0.png）
+ */
+function extractS3KeyFromUrl(url: string): string | null {
+	try {
+		// 尝试匹配 images/ 或 models/ 开头的路径
+		const match = url.match(/(images\/[^?#]+|models\/[^?#]+)/);
+		return match ? match[1] : null;
+	} catch (error) {
+		logger.warn({ url, error }, '无法从 URL 提取 S3 key');
+		return null;
+	}
+}
+
 export async function deleteModel(modelId: string, userId: string) {
 	const model = await getModelById(modelId);
 	if (model.userId !== userId) throw new ForbiddenError('无权限删除此模型');
+
+	// 删除模型相关的所有 S3 文件
+	const fileUrls = [model.modelUrl, model.mtlUrl, model.textureUrl, model.previewImageUrl].filter(
+		Boolean,
+	) as string[];
+
+	for (const url of fileUrls) {
+		const key = extractS3KeyFromUrl(url);
+		if (key) {
+			try {
+				await storageService.delete(key);
+				logger.info({ msg: '✅ 已删除模型文件', modelId, key });
+			} catch (error) {
+				// 删除失败记录日志但不阻断流程（文件可能已被删除）
+				logger.warn({
+					msg: '⚠️ 删除模型文件失败',
+					modelId,
+					key,
+					error,
+				});
+			}
+		}
+	}
+
+	// 删除数据库记录
 	await modelRepository.delete(modelId);
+
+	logger.info({
+		msg: '✅ 删除模型完成',
+		modelId,
+		deletedFiles: fileUrls.length,
+	});
 }
 
 export async function incrementViewCount(modelId: string) {

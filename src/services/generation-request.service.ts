@@ -19,6 +19,7 @@ import {
 } from '@/repositories';
 import { NotFoundError, ValidationError } from '@/utils/errors';
 import { logger } from '@/utils/logger';
+import { storageService } from './storage.service.js';
 
 /**
  * 获取生成请求列表
@@ -248,6 +249,27 @@ export async function selectImageAndGenerateModel(requestId: string, selectedIma
 }
 
 /**
+ * 从 S3 URL 提取 key
+ * 支持多种 S3 URL 格式：
+ * - 腾讯云 COS: https://{bucket}.cos.{region}.myqcloud.com/{key}
+ * - MinIO: {endpoint}/{bucket}/{key}
+ * - AWS S3: https://{bucket}.s3.{region}.amazonaws.com/{key}
+ *
+ * @param url S3 完整 URL
+ * @returns S3 key（如 images/xxx/0.png 或 models/xxx/model.obj）
+ */
+function extractS3KeyFromUrl(url: string): string | null {
+	try {
+		// 尝试匹配 images/ 或 models/ 开头的路径
+		const match = url.match(/(images\/[^?#]+|models\/[^?#]+)/);
+		return match ? match[1] : null;
+	} catch (error) {
+		logger.warn({ url, error }, '无法从 URL 提取 S3 key');
+		return null;
+	}
+}
+
+/**
  * 删除生成请求及其所有资源（图片、模型文件）
  * @param requestId 生成请求ID
  * @throws NotFoundError - 生成请求不存在
@@ -256,27 +278,75 @@ export async function deleteRequest(requestId: string) {
 	// 验证生成请求存在
 	await getRequestById(requestId);
 
-	// TODO: 删除文件资源（图片和模型）
-	// const storageProvider = createStorageProvider();
-	// await storageProvider.deleteTaskResources(requestId);
+	// 1. 删除所有图片文件
+	const images = await generatedImageRepository.findByRequestId(requestId);
+	for (const image of images) {
+		if (image.imageUrl) {
+			const key = extractS3KeyFromUrl(image.imageUrl);
+			if (key) {
+				try {
+					await storageService.delete(key);
+					logger.info({ msg: '✅ 已删除图片文件', requestId, imageId: image.id, key });
+				} catch (error) {
+					// 删除失败记录日志但不阻断流程（文件可能已被删除）
+					logger.warn({
+						msg: '⚠️ 删除图片文件失败',
+						requestId,
+						imageId: image.id,
+						key,
+						error,
+					});
+				}
+			}
+		}
+	}
 
-	// 1. 先删除关联的模型记录（如果存在）
+	// 2. 删除关联的模型文件和数据库记录（如果存在）
 	const associatedModel = await modelRepository.findByRequestId(requestId);
 	if (associatedModel) {
+		// 删除模型相关的所有文件（modelUrl, mtlUrl, textureUrl）
+		const modelUrls = [
+			associatedModel.modelUrl,
+			associatedModel.mtlUrl,
+			associatedModel.textureUrl,
+		].filter(Boolean) as string[];
+
+		for (const url of modelUrls) {
+			const key = extractS3KeyFromUrl(url);
+			if (key) {
+				try {
+					await storageService.delete(key);
+					logger.info({ msg: '✅ 已删除模型文件', requestId, modelId: associatedModel.id, key });
+				} catch (error) {
+					// 删除失败记录日志但不阻断流程
+					logger.warn({
+						msg: '⚠️ 删除模型文件失败',
+						requestId,
+						modelId: associatedModel.id,
+						key,
+						error,
+					});
+				}
+			}
+		}
+
+		// 删除模型数据库记录
 		await modelRepository.delete(associatedModel.id);
 		logger.info({
-			msg: '✅ 已删除关联的模型',
+			msg: '✅ 已删除关联的模型记录',
 			requestId,
 			modelId: associatedModel.id,
 		});
 	}
 
-	// 2. 调用 Repository 层删除数据库记录（级联删除 images）
+	// 3. 调用 Repository 层删除数据库记录（级联删除 images）
 	await generationRequestRepository.delete(requestId);
 
 	logger.info({
-		msg: '✅ 删除生成请求',
+		msg: '✅ 删除生成请求完成',
 		requestId,
+		deletedImages: images.length,
+		deletedModel: !!associatedModel,
 	});
 }
 
