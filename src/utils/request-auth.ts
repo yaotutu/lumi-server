@@ -3,7 +3,7 @@
  * 职责：从请求头中读取 middleware 传递的用户信息
  *
  * 架构设计：
- * - Middleware 验证 Cookie 并将用户信息添加到请求头
+ * - Middleware 验证 Bearer Token 并将用户信息添加到请求头
  * - API 通过此工具函数读取用户信息，无需重复验证
  * - 所有受保护的 API 都已经过 middleware 验证，这里只是读取
  */

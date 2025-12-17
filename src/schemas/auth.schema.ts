@@ -51,7 +51,7 @@ export const sendCodeSchema = {
 export const verifyCodeSchema = {
 	tags: ['认证'],
 	summary: '验证码登录',
-	description: '使用邮箱和验证码登录，成功后会设置 Session Cookie',
+	description: '使用邮箱和验证码登录，成功后返回 Bearer Token',
 	body: {
 		type: 'object',
 		required: ['email', 'code'],
@@ -84,7 +84,7 @@ export const verifyCodeSchema = {
 export const getMeSchema = {
 	tags: ['认证'],
 	summary: '获取当前登录用户',
-	description: '通过 Session Cookie 获取当前登录用户信息',
+	description: '通过 Bearer Token 获取当前登录用户信息',
 	response: {
 		200: createSuccessResponseSchema({
 			type: 'object',
@@ -110,7 +110,7 @@ export const getMeSchema = {
 export const logoutSchema = {
 	tags: ['认证'],
 	summary: '登出',
-	description: '清除 Session Cookie，退出登录',
+	description: '注销当前登录会话（由外部登录系统处理）',
 	response: {
 		200: createSuccessResponseSchema({
 			type: 'object',

@@ -64,15 +64,6 @@ const envSchema = z.object({
 		.default('http://localhost:4100,http://192.168.88.100:4100')
 		.transform((val) => val.split(',').map((url) => url.trim())),
 
-	// Cookie domain 配置（跨端口共享 Cookie）
-	COOKIE_DOMAIN: z.string().default('192.168.88.100'),
-
-	// Cookie Secret（用于签名 Cookie，生产环境必须配置）
-	COOKIE_SECRET: z
-		.string()
-		.min(32, 'COOKIE_SECRET must be at least 32 characters for security')
-		.describe('用于签名 Cookie 的密钥，生产环境必须配置强密钥'),
-
 	// 用户服务配置
 	USER_SERVICE_URL: z.string().default('http://user.ai3d.top'),
 
@@ -169,12 +160,6 @@ export const config = {
 	// CORS 配置
 	cors: {
 		origins: env.FRONTEND_URLS,
-	},
-
-	// Cookie 配置
-	cookie: {
-		domain: env.COOKIE_DOMAIN,
-		secret: env.COOKIE_SECRET,
 	},
 
 	// 用户服务配置

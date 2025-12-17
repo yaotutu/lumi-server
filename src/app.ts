@@ -1,4 +1,3 @@
-import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
@@ -38,16 +37,9 @@ export async function buildApp() {
 		crossOriginResourcePolicy: { policy: 'cross-origin' }, // ✅ 允许跨域资源加载（解决图片代理 CORP 问题）
 	});
 
-	// Cookie 支持
-	await app.register(cookie, {
-		secret: config.cookie.secret,
-		parseOptions: {},
-	});
-
 	// CORS 配置
 	await app.register(cors, {
 		origin: config.cors.origins, // 使用具体的前端域名列表
-		credentials: true,
 		methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], // 明确允许的 HTTP 方法
 		allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id'], // 允许的请求头
 	});
@@ -84,24 +76,21 @@ export async function buildApp() {
 			],
 			tags: [
 				{ name: '认证', description: '用户认证相关接口 - 邮箱验证码登录' },
-				{ name: '任务', description: '生成任务相关接口 - 创建和管理图片/模型生成任务' },
+				{
+					name: '任务',
+					description: '生成任务相关接口 - 创建和管理图片/模型生成任务',
+				},
 				{ name: '模型', description: '3D 模型管理接口 - 查看、发布、更新模型' },
 				{ name: '交互', description: '用户交互接口 - 点赞、收藏功能' },
 				{ name: '健康检查', description: '系统健康检查接口' },
 			],
 			components: {
 				securitySchemes: {
-					cookieAuth: {
-						type: 'apiKey',
-						in: 'cookie',
-						name: 'lumi_session',
-						description: 'Session Cookie 认证',
-					},
 					headerAuth: {
 						type: 'apiKey',
 						in: 'header',
 						name: 'x-user-id',
-						description: '用户 ID Header（临时方案，生产环境使用 Cookie）',
+						description: '用户 ID Header（通过 Bearer Token 认证后设置）',
 					},
 				},
 			},
