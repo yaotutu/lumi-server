@@ -328,11 +328,16 @@ export class GenerationRequestRepository {
 	/**
 	 * 根据用户外部 ID 和请求 ID 查询（用于权限验证）
 	 */
-	async findByIdAndUserId(id: string, externalUserId: string): Promise<GenerationRequest | undefined> {
+	async findByIdAndUserId(
+		id: string,
+		externalUserId: string,
+	): Promise<GenerationRequest | undefined> {
 		const [request] = await db
 			.select()
 			.from(generationRequests)
-			.where(and(eq(generationRequests.id, id), eq(generationRequests.externalUserId, externalUserId)))
+			.where(
+				and(eq(generationRequests.id, id), eq(generationRequests.externalUserId, externalUserId)),
+			)
 			.limit(1);
 
 		return request;

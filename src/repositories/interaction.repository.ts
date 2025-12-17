@@ -12,7 +12,11 @@ export class InteractionRepository {
 	 */
 	async create(data: NewModelInteraction): Promise<ModelInteraction> {
 		await db.insert(modelInteractions).values(data);
-		const interaction = await this.findByUserModelAndType(data.externalUserId, data.modelId, data.type);
+		const interaction = await this.findByUserModelAndType(
+			data.externalUserId,
+			data.modelId,
+			data.type,
+		);
 		if (!interaction) {
 			throw new Error('Failed to create interaction');
 		}
@@ -45,7 +49,11 @@ export class InteractionRepository {
 	/**
 	 * 删除交互记录
 	 */
-	async delete(externalUserId: string, modelId: string, type: 'LIKE' | 'FAVORITE'): Promise<boolean> {
+	async delete(
+		externalUserId: string,
+		modelId: string,
+		type: 'LIKE' | 'FAVORITE',
+	): Promise<boolean> {
 		const result = await db
 			.delete(modelInteractions)
 			.where(
@@ -71,7 +79,12 @@ export class InteractionRepository {
 		return db
 			.select()
 			.from(modelInteractions)
-			.where(and(eq(modelInteractions.externalUserId, externalUserId), eq(modelInteractions.type, 'LIKE')))
+			.where(
+				and(
+					eq(modelInteractions.externalUserId, externalUserId),
+					eq(modelInteractions.type, 'LIKE'),
+				),
+			)
 			.orderBy(modelInteractions.createdAt)
 			.limit(limit)
 			.offset(offset);
@@ -89,7 +102,12 @@ export class InteractionRepository {
 		return db
 			.select()
 			.from(modelInteractions)
-			.where(and(eq(modelInteractions.externalUserId, externalUserId), eq(modelInteractions.type, 'FAVORITE')))
+			.where(
+				and(
+					eq(modelInteractions.externalUserId, externalUserId),
+					eq(modelInteractions.type, 'FAVORITE'),
+				),
+			)
 			.orderBy(modelInteractions.createdAt)
 			.limit(limit)
 			.offset(offset);
@@ -98,14 +116,20 @@ export class InteractionRepository {
 	/**
 	 * 批量查询用户对多个模型的交互状态
 	 */
-	async findBatchInteractions(externalUserId: string, modelIds: string[]): Promise<ModelInteraction[]> {
+	async findBatchInteractions(
+		externalUserId: string,
+		modelIds: string[],
+	): Promise<ModelInteraction[]> {
 		if (modelIds.length === 0) return [];
 
 		return db
 			.select()
 			.from(modelInteractions)
 			.where(
-				and(eq(modelInteractions.externalUserId, externalUserId), inArray(modelInteractions.modelId, modelIds)),
+				and(
+					eq(modelInteractions.externalUserId, externalUserId),
+					inArray(modelInteractions.modelId, modelIds),
+				),
 			);
 	}
 

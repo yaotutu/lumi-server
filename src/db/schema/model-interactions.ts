@@ -22,8 +22,16 @@ export const modelInteractions = mysqlTable(
 		createdAt: timestamp('created_at').notNull().defaultNow(),
 	},
 	(table) => [
-		unique('external_user_id_model_id_type_unique').on(table.externalUserId, table.modelId, table.type),
-		index('external_user_id_type_created_at_idx').on(table.externalUserId, table.type, table.createdAt),
+		unique('external_user_id_model_id_type_unique').on(
+			table.externalUserId,
+			table.modelId,
+			table.type,
+		),
+		index('external_user_id_type_created_at_idx').on(
+			table.externalUserId,
+			table.type,
+			table.createdAt,
+		),
 		index('model_id_type_idx').on(table.modelId, table.type),
 	],
 );

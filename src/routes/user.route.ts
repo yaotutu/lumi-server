@@ -74,7 +74,9 @@ export async function userRoutes(fastify: FastifyInstance) {
 				return reply.send(success(data.data));
 			}
 
-			return reply.code(data.code || 400).send(fail(data.msg || '获取用户信息失败', 'USER_SERVICE_ERROR'));
+			return reply
+				.code(data.code || 400)
+				.send(fail(data.msg || '获取用户信息失败', 'USER_SERVICE_ERROR'));
 		} catch (error) {
 			logger.error({ msg: '获取用户信息失败', error });
 			return reply.code(500).send(fail('服务器内部错误', 'INTERNAL_ERROR'));
@@ -100,7 +102,9 @@ export async function userRoutes(fastify: FastifyInstance) {
 				return reply.send(success(data.data));
 			}
 
-			return reply.code(data.code || 400).send(fail(data.msg || '获取用户信息失败', 'USER_SERVICE_ERROR'));
+			return reply
+				.code(data.code || 400)
+				.send(fail(data.msg || '获取用户信息失败', 'USER_SERVICE_ERROR'));
 		} catch (error) {
 			logger.error({ msg: '获取用户信息失败', error });
 			return reply.code(500).send(fail('服务器内部错误', 'INTERNAL_ERROR'));
@@ -125,13 +129,20 @@ export async function userRoutes(fastify: FastifyInstance) {
 				return reply.code(401).send(fail('未提供认证凭证', 'UNAUTHENTICATED'));
 			}
 
-			const { data } = await proxyToUserService(authHeader, 'POST', '/api/v1.0/update', request.body);
+			const { data } = await proxyToUserService(
+				authHeader,
+				'POST',
+				'/api/v1.0/update',
+				request.body,
+			);
 
 			if (data.code === 200) {
 				return reply.send(success({ message: data.msg || '更新成功' }));
 			}
 
-			return reply.code(data.code || 400).send(fail(data.msg || '更新用户信息失败', 'USER_SERVICE_ERROR'));
+			return reply
+				.code(data.code || 400)
+				.send(fail(data.msg || '更新用户信息失败', 'USER_SERVICE_ERROR'));
 		} catch (error) {
 			logger.error({ msg: '更新用户信息失败', error });
 			return reply.code(500).send(fail('服务器内部错误', 'INTERNAL_ERROR'));
@@ -192,11 +203,12 @@ export async function userRoutes(fastify: FastifyInstance) {
 				return reply.send(success({ message: data.msg || '修改密码成功' }));
 			}
 
-			return reply.code(data.code || 400).send(fail(data.msg || '修改密码失败', 'USER_SERVICE_ERROR'));
+			return reply
+				.code(data.code || 400)
+				.send(fail(data.msg || '修改密码失败', 'USER_SERVICE_ERROR'));
 		} catch (error) {
 			logger.error({ msg: '修改密码失败', error });
 			return reply.code(500).send(fail('服务器内部错误', 'INTERNAL_ERROR'));
 		}
 	});
 }
-
