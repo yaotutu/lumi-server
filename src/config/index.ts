@@ -73,6 +73,9 @@ const envSchema = z.object({
 		.min(32, 'COOKIE_SECRET must be at least 32 characters for security')
 		.describe('用于签名 Cookie 的密钥，生产环境必须配置强密钥'),
 
+	// 用户服务配置
+	USER_SERVICE_URL: z.string().default('http://user.ai3d.top'),
+
 	// 服务器公开访问 URL（用于生成代理 URL）
 	// TODO: 后期优化 - 配置 CORS 后，可不再需要代理
 	PUBLIC_URL: z.string().optional(),
@@ -173,4 +176,11 @@ export const config = {
 		domain: env.COOKIE_DOMAIN,
 		secret: env.COOKIE_SECRET,
 	},
+
+	// 用户服务配置
+	userService: {
+		url: env.USER_SERVICE_URL,
+	},
 } as const;
+
+export default config;

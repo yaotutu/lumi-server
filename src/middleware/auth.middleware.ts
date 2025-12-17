@@ -1,12 +1,13 @@
 /**
- * Fastify 认证中间件
+ * Fastify 认证中间件（改造为 Bearer Token 验证）
  *
  * 职责：验证用户身份，并通过请求头传递用户信息
  *
  * 架构设计：
- * - 统一认证拦截（middleware 唯一认证入口）
- * - 验证通过后，通过请求头 (x-user-id) 传递用户信息给路由处理器
- * - 路由处理器直接从请求头读取 userId，无需重复验证
+ * - 从 Authorization Header 获取 Bearer Token
+ * - 调用外部用户服务验证 Token
+ * - 查找或创建本地用户映射
+ * - 通过请求头 (x-user-id) 传递用户信息给路由处理器
  * - 认证失败时，返回 401 + JSend 错误格式
  *
  * 使用方式：
@@ -16,67 +17,9 @@
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { isProtectedRoute } from '@/config/api-routes';
+import * as externalUserService from '@/services/external-user.service';
+import * as userRepository from '@/repositories/user.repository';
 import { logger } from '@/utils/logger';
-
-/**
- * Cookie 名称
- */
-const AUTH_COOKIE_NAME = 'auth-session';
-
-/**
- * 用户会话数据结构
- */
-interface UserSession {
-	userId: string;
-	email: string;
-}
-
-/**
- * 验证结果 - 使用判别联合类型确保类型安全
- */
-type AuthResult =
-	| {
-			isAuthenticated: true;
-			userId: string;
-			email: string;
-	  }
-	| {
-			isAuthenticated: false;
-	  };
-
-/**
- * 验证用户会话并返回用户信息
- *
- * @param request - Fastify 请求对象
- * @returns { isAuthenticated: boolean, userId?: string, email?: string }
- */
-function checkAuth(request: FastifyRequest): AuthResult {
-	// 从 Cookie 中获取会话信息
-	const sessionCookie = request.cookies[AUTH_COOKIE_NAME];
-
-	if (!sessionCookie) {
-		return { isAuthenticated: false };
-	}
-
-	try {
-		// 验证 JSON 格式
-		const userSession: UserSession = JSON.parse(sessionCookie);
-
-		// 验证必需字段
-		if (userSession.userId && userSession.email) {
-			return {
-				isAuthenticated: true,
-				userId: userSession.userId,
-				email: userSession.email,
-			};
-		}
-
-		return { isAuthenticated: false };
-	} catch (_error) {
-		// JSON 解析失败或格式错误
-		return { isAuthenticated: false };
-	}
-}
 
 /**
  * Fastify 认证中间件
@@ -102,26 +45,14 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
 		return;
 	}
 
-	// 调试日志：查看请求的 Cookie
-	logger.info({
-		msg: '认证中间件检查',
-		pathname,
-		method,
-		cookies: request.cookies,
-		hasAuthCookie: !!request.cookies[AUTH_COOKIE_NAME],
-		cookieValue: request.cookies[AUTH_COOKIE_NAME],
-	});
+	// 从 Header 获取 Bearer Token
+	const authHeader = request.headers.authorization;
 
-	// 验证用户登录状态并获取用户信息
-	const authResult = checkAuth(request);
-
-	if (!authResult.isAuthenticated) {
-		// 用户未登录，返回 401 + JSend 错误格式
+	if (!authHeader || !authHeader.startsWith('Bearer ')) {
 		logger.warn({
-			msg: '未认证访问受保护的 API',
+			msg: '未提供 Token',
 			pathname,
 			method,
-			cookieValue: request.cookies[AUTH_COOKIE_NAME],
 		});
 
 		return reply.status(401).send({
@@ -133,16 +64,49 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
 		});
 	}
 
-	// 已登录，通过请求头传递用户信息给路由处理器
-	// 这样路由处理器可以直接读取，无需重复解析 Cookie
-	// TypeScript 现在知道 authResult.userId 和 email 一定存在（因为 isAuthenticated 为 true）
-	request.headers['x-user-id'] = authResult.userId;
-	request.headers['x-user-email'] = authResult.email;
+	// 直接使用完整的 Authorization header（包含 "Bearer " 前缀）
+	// 调用外部用户服务验证 Token 并获取用户信息
+	const externalUser = await externalUserService.verifyTokenAndGetUser(authHeader);
+
+	if (!externalUser) {
+		logger.warn({
+			msg: 'Token 验证失败',
+			pathname,
+			method,
+		});
+
+		return reply.status(401).send({
+			status: 'fail',
+			data: {
+				message: 'Token 无效或已过期',
+				code: 'UNAUTHENTICATED',
+			},
+		});
+	}
+
+	// 查找或创建本地用户记录（映射）
+	let localUser = await userRepository.findByExternalUserId(externalUser.user_id);
+
+	if (!localUser) {
+		// 首次访问，创建本地用户映射记录
+		localUser = await userRepository.createFromExternalUser(externalUser);
+		logger.info({
+			msg: '✅ 创建本地用户映射',
+			externalUserId: externalUser.user_id,
+			localUserId: localUser.id,
+		});
+	}
+
+	// 将本地用户ID传递给路由处理器
+	request.headers['x-user-id'] = localUser.id;
+	request.headers['x-external-user-id'] = externalUser.user_id;
+	request.headers['x-user-email'] = externalUser.email;
 
 	logger.debug({
-		msg: '认证通过',
+		msg: '✅ 认证通过',
 		pathname,
 		method,
-		userId: authResult.userId,
+		userId: localUser.id,
+		externalUserId: externalUser.user_id,
 	});
 }

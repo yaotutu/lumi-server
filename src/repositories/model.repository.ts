@@ -30,7 +30,7 @@ export class ModelRepository {
 
 	/**
 	 * 根据 ID 查询模型
-	 * 返回包含用户信息、请求信息、源图片信息和生成任务信息的模型数据
+	 * 返回包含请求信息、源图片信息和生成任务信息的模型数据
 	 * URL 已转换为代理 URL，前端可直接使用
 	 */
 	// biome-ignore lint/suspicious/noExplicitAny: 复杂的 join 查询返回类型，待定义专门的返回类型接口
@@ -63,13 +63,8 @@ export class ModelRepository {
 				fileSize: models.fileSize,
 				sliceTaskId: models.sliceTaskId,
 				printStatus: models.printStatus,
-				// 关联 user 信息
-				user: {
-					id: users.id,
-					name: users.name,
-					email: users.email,
-					avatar: users.avatar,
-				},
+				// 用户外部ID（用于临时显示用户信息）
+				externalUserId: users.externalUserId,
 				// 关联 request 信息
 				request: {
 					id: generationRequests.id,
@@ -143,7 +138,6 @@ export class ModelRepository {
 
 	/**
 	 * 查询公开模型列表（支持筛选和排序）
-	 * 返回包含用户信息的模型列表（JOIN users 表）
 	 * URL 已转换为代理 URL，前端可直接使用
 	 */
 	async findPublicModels(
@@ -175,11 +169,8 @@ export class ModelRepository {
 				completedAt: models.completedAt,
 				createdAt: models.createdAt,
 				updatedAt: models.updatedAt,
-				// 关联 user 信息
-				user: {
-					id: users.id,
-					name: users.name,
-				},
+				// 用户外部ID（用于临时显示用户信息）
+				externalUserId: users.externalUserId,
 			})
 			.from(models)
 			.leftJoin(users, eq(models.userId, users.id))

@@ -16,6 +16,16 @@ import { storageService } from './storage.service.js';
 export async function getModelById(modelId: string) {
 	const model = await modelRepository.findById(modelId);
 	if (!model) throw new NotFoundError(`模型不存在: ${modelId}`);
+
+	// 临时方案：用 externalUserId 构造 user 对象（等外部服务提供查询接口后升级）
+	if (model.externalUserId) {
+		model.user = {
+			id: model.externalUserId,
+			name: model.externalUserId,
+			email: model.externalUserId,
+		};
+	}
+
 	return model;
 }
 
@@ -33,14 +43,29 @@ export async function getPublicModels(options?: {
 	// 获取模型列表（包含用户信息）
 	const items = await modelRepository.findPublicModels(options);
 
+	// 临时方案：用 externalUserId 构造 user 对象（等外部服务提供查询接口后升级）
+	const itemsWithUser = items.map((model) => {
+		if (model.externalUserId) {
+			return {
+				...model,
+				user: {
+					id: model.externalUserId,
+					name: model.externalUserId,
+					email: model.externalUserId,
+				},
+			};
+		}
+		return model;
+	});
+
 	// 获取总数
 	const total = await modelRepository.countPublicModels();
 
 	// 计算是否还有更多
-	const hasMore = offset + items.length < total;
+	const hasMore = offset + itemsWithUser.length < total;
 
 	return {
-		items,
+		items: itemsWithUser,
 		total,
 		hasMore,
 	};

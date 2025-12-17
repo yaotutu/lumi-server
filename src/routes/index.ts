@@ -8,6 +8,7 @@ import { healthRoutes } from './health.route.js';
 import { interactionRoutes } from './interactions.route.js';
 import { proxyRoutes } from './proxy.route.js';
 import { taskRoutes } from './tasks.route.js';
+import { userRoutes } from './user.route.js';
 import { workerRoutes } from './workers.route.js';
 
 /**
@@ -19,6 +20,9 @@ export async function routes(fastify: FastifyInstance) {
 
 	// 认证路由
 	await fastify.register(authRoutes);
+
+	// 用户管理路由
+	await fastify.register(userRoutes);
 
 	// 代理路由（图片和模型）
 	await fastify.register(proxyRoutes);
