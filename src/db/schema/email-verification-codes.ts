@@ -1,7 +1,6 @@
 import { createId } from '@paralleldrive/cuid2';
 import { relations } from 'drizzle-orm';
 import { index, mysqlTable, timestamp, varchar } from 'drizzle-orm/mysql-core';
-import { users } from './users.js';
 
 /**
  * 邮箱验证码表
@@ -19,7 +18,7 @@ export const emailVerificationCodes = mysqlTable(
 		expiresAt: timestamp('expires_at').notNull(),
 		verifiedAt: timestamp('verified_at'),
 
-		userId: varchar('user_id', { length: 36 }),
+		externalUserId: varchar('external_user_id', { length: 36 }),
 
 		createdAt: timestamp('created_at').notNull().defaultNow(),
 	},
@@ -29,13 +28,8 @@ export const emailVerificationCodes = mysqlTable(
 	],
 );
 
-// 定义关系
-export const emailVerificationCodesRelations = relations(emailVerificationCodes, ({ one }) => ({
-	user: one(users, {
-		fields: [emailVerificationCodes.userId],
-		references: [users.id],
-	}),
-}));
+// 定义关系（当前无关系）
+export const emailVerificationCodesRelations = relations(emailVerificationCodes, () => ({}));
 
 export type EmailVerificationCode = typeof emailVerificationCodes.$inferSelect;
 export type NewEmailVerificationCode = typeof emailVerificationCodes.$inferInsert;

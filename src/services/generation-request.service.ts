@@ -110,7 +110,7 @@ export async function createRequest(userId: string, prompt: string) {
 		// 步骤 1: 创建 GenerationRequest
 		await tx.insert(generationRequests).values({
 			id: requestId,
-			userId,
+			externalUserId: userId,
 			prompt: trimmedPrompt,
 			status: 'IMAGE_PENDING',
 			phase: 'IMAGE_GENERATION',
@@ -206,7 +206,7 @@ export async function selectImageAndGenerateModel(requestId: string, selectedIma
 	const model = await modelRepository.create({
 		id: modelId,
 		requestId,
-		userId: request.userId,
+		externalUserId: request.externalUserId,
 		name: `模型-${requestId.substring(0, 8)}`,
 		previewImageUrl: selectedImage.imageUrl,
 		visibility: 'PUBLIC',
@@ -230,7 +230,7 @@ export async function selectImageAndGenerateModel(requestId: string, selectedIma
 		modelId,
 		imageUrl: selectedImage.imageUrl,
 		requestId,
-		userId: request.userId,
+		externalUserId: request.externalUserId,
 	});
 
 	logger.info({
@@ -371,7 +371,7 @@ export async function submitPrintTask(requestId: string, userId: string) {
 	const request = await getRequestById(requestId);
 
 	// 验证用户权限
-	if (request.userId !== userId) {
+	if (request.externalUserId !== userId) {
 		throw new ValidationError('无权限操作此生成请求');
 	}
 

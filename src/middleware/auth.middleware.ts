@@ -18,7 +18,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { isProtectedRoute } from '@/config/api-routes';
 import * as externalUserService from '@/services/external-user.service';
-import * as userRepository from '@/repositories/user.repository';
 import { logger } from '@/utils/logger';
 
 /**
@@ -84,21 +83,8 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
 		});
 	}
 
-	// 查找或创建本地用户记录（映射）
-	let localUser = await userRepository.findByExternalUserId(externalUser.user_id);
-
-	if (!localUser) {
-		// 首次访问，创建本地用户映射记录
-		localUser = await userRepository.createFromExternalUser(externalUser);
-		logger.info({
-			msg: '✅ 创建本地用户映射',
-			externalUserId: externalUser.user_id,
-			localUserId: localUser.id,
-		});
-	}
-
-	// 将本地用户ID传递给路由处理器
-	request.headers['x-user-id'] = localUser.id;
+	// 直接将外部用户ID传递给路由处理器（不再需要本地用户表）
+	request.headers['x-user-id'] = externalUser.user_id;
 	request.headers['x-external-user-id'] = externalUser.user_id;
 	request.headers['x-user-email'] = externalUser.email;
 
@@ -106,7 +92,6 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
 		msg: '✅ 认证通过',
 		pathname,
 		method,
-		userId: localUser.id,
 		externalUserId: externalUser.user_id,
 	});
 }

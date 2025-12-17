@@ -7,7 +7,7 @@ export interface ModelJobData {
 	modelId: string;
 	imageUrl: string;
 	requestId: string;
-	userId: string;
+	externalUserId: string;
 }
 
 export const modelQueue = new Queue<ModelJobData>('model-generation', {

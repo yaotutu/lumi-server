@@ -10,4 +10,3 @@ export * from './image-job.repository';
 export * from './interaction.repository';
 export * from './model.repository';
 export * from './model-job.repository';
-export * from './user.repository';

@@ -75,7 +75,7 @@ export class GenerationRequestRepository {
 		const [modelRow] = await db
 			.select({
 				id: models.id,
-				userId: models.userId,
+				externalUserId: models.externalUserId,
 				source: models.source,
 				requestId: models.requestId,
 				sourceImageId: models.sourceImageId,
@@ -139,12 +139,12 @@ export class GenerationRequestRepository {
 	}
 
 	/**
-	 * 根据用户 ID 查询请求列表（分页，包含关联数据）
+	 * 根据用户外部 ID 查询请求列表（分页，包含关联数据）
 	 * 手动加载关联数据，确保与 Prisma 格式一致
 	 * URL 已转换为代理 URL，前端可直接使用
 	 */
 	async findByUserId(
-		userId: string,
+		externalUserId: string,
 		options: {
 			limit?: number;
 			offset?: number;
@@ -156,7 +156,7 @@ export class GenerationRequestRepository {
 		const requests = await db
 			.select()
 			.from(generationRequests)
-			.where(eq(generationRequests.userId, userId))
+			.where(eq(generationRequests.externalUserId, externalUserId))
 			.orderBy(desc(generationRequests.createdAt))
 			.limit(limit)
 			.offset(offset);
@@ -269,11 +269,11 @@ export class GenerationRequestRepository {
 	/**
 	 * 统计用户的请求总数
 	 */
-	async countByUserId(userId: string): Promise<number> {
+	async countByUserId(externalUserId: string): Promise<number> {
 		const [result] = await db
 			.select({ count: sql<number>`count(*)` })
 			.from(generationRequests)
-			.where(eq(generationRequests.userId, userId));
+			.where(eq(generationRequests.externalUserId, externalUserId));
 
 		return result.count;
 	}
@@ -326,13 +326,13 @@ export class GenerationRequestRepository {
 	}
 
 	/**
-	 * 根据用户 ID 和请求 ID 查询（用于权限验证）
+	 * 根据用户外部 ID 和请求 ID 查询（用于权限验证）
 	 */
-	async findByIdAndUserId(id: string, userId: string): Promise<GenerationRequest | undefined> {
+	async findByIdAndUserId(id: string, externalUserId: string): Promise<GenerationRequest | undefined> {
 		const [request] = await db
 			.select()
 			.from(generationRequests)
-			.where(and(eq(generationRequests.id, id), eq(generationRequests.userId, userId)))
+			.where(and(eq(generationRequests.id, id), eq(generationRequests.externalUserId, externalUserId)))
 			.limit(1);
 
 		return request;

@@ -7,7 +7,6 @@ import {
 	modelGenerationJobs,
 	models,
 	type NewModel,
-	users,
 } from '@/db/schema';
 import { transformToProxyUrl } from '@/utils/url-transformer';
 
@@ -50,7 +49,7 @@ export class ModelRepository {
 				favoriteCount: models.favoriteCount,
 				viewCount: models.viewCount,
 				downloadCount: models.downloadCount,
-				userId: models.userId,
+				externalUserId: models.externalUserId,
 				requestId: models.requestId,
 				sourceImageId: models.sourceImageId,
 				publishedAt: models.publishedAt,
@@ -63,8 +62,6 @@ export class ModelRepository {
 				fileSize: models.fileSize,
 				sliceTaskId: models.sliceTaskId,
 				printStatus: models.printStatus,
-				// 用户外部ID（用于临时显示用户信息）
-				externalUserId: users.externalUserId,
 				// 关联 request 信息
 				request: {
 					id: generationRequests.id,
@@ -89,7 +86,6 @@ export class ModelRepository {
 				},
 			})
 			.from(models)
-			.leftJoin(users, eq(models.userId, users.id))
 			.leftJoin(generationRequests, eq(models.requestId, generationRequests.id))
 			.leftJoin(generatedImages, eq(models.sourceImageId, generatedImages.id))
 			.leftJoin(modelGenerationJobs, eq(models.id, modelGenerationJobs.modelId))
@@ -116,10 +112,10 @@ export class ModelRepository {
 	}
 
 	/**
-	 * 根据用户 ID 查询模型列表
+	 * 根据用户外部 ID 查询模型列表
 	 */
 	async findByUserId(
-		userId: string,
+		externalUserId: string,
 		options: {
 			limit?: number;
 			offset?: number;
@@ -130,7 +126,7 @@ export class ModelRepository {
 		return db
 			.select()
 			.from(models)
-			.where(eq(models.userId, userId))
+			.where(eq(models.externalUserId, externalUserId))
 			.orderBy(desc(models.createdAt))
 			.limit(limit)
 			.offset(offset);
@@ -146,7 +142,7 @@ export class ModelRepository {
 	): Promise<any[]> {
 		const { sortBy = 'latest', limit = 20, offset = 0 } = options;
 
-		// 构建查询，JOIN users 表获取用户信息
+		// 构建查询
 		const baseQuery = db
 			.select({
 				id: models.id,
@@ -162,18 +158,15 @@ export class ModelRepository {
 				favoriteCount: models.favoriteCount,
 				viewCount: models.viewCount,
 				downloadCount: models.downloadCount,
-				userId: models.userId,
+				externalUserId: models.externalUserId,
 				requestId: models.requestId,
 				sourceImageId: models.sourceImageId,
 				publishedAt: models.publishedAt,
 				completedAt: models.completedAt,
 				createdAt: models.createdAt,
 				updatedAt: models.updatedAt,
-				// 用户外部ID（用于临时显示用户信息）
-				externalUserId: users.externalUserId,
 			})
 			.from(models)
-			.leftJoin(users, eq(models.userId, users.id))
 			.where(
 				and(
 					eq(models.visibility, 'PUBLIC'),
@@ -362,13 +355,13 @@ export class ModelRepository {
 	}
 
 	/**
-	 * 根据用户 ID 和模型 ID 查询（用于权限验证）
+	 * 根据用户外部 ID 和模型 ID 查询（用于权限验证）
 	 */
-	async findByIdAndUserId(id: string, userId: string): Promise<Model | undefined> {
+	async findByIdAndUserId(id: string, externalUserId: string): Promise<Model | undefined> {
 		const [model] = await db
 			.select()
 			.from(models)
-			.where(and(eq(models.id, id), eq(models.userId, userId)))
+			.where(and(eq(models.id, id), eq(models.externalUserId, externalUserId)))
 			.limit(1);
 
 		return model;

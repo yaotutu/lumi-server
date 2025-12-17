@@ -12,7 +12,7 @@ export class InteractionRepository {
 	 */
 	async create(data: NewModelInteraction): Promise<ModelInteraction> {
 		await db.insert(modelInteractions).values(data);
-		const interaction = await this.findByUserModelAndType(data.userId, data.modelId, data.type);
+		const interaction = await this.findByUserModelAndType(data.externalUserId, data.modelId, data.type);
 		if (!interaction) {
 			throw new Error('Failed to create interaction');
 		}
@@ -23,7 +23,7 @@ export class InteractionRepository {
 	 * 查询交互记录
 	 */
 	async findByUserModelAndType(
-		userId: string,
+		externalUserId: string,
 		modelId: string,
 		type: 'LIKE' | 'FAVORITE',
 	): Promise<ModelInteraction | undefined> {
@@ -32,7 +32,7 @@ export class InteractionRepository {
 			.from(modelInteractions)
 			.where(
 				and(
-					eq(modelInteractions.userId, userId),
+					eq(modelInteractions.externalUserId, externalUserId),
 					eq(modelInteractions.modelId, modelId),
 					eq(modelInteractions.type, type),
 				),
@@ -45,12 +45,12 @@ export class InteractionRepository {
 	/**
 	 * 删除交互记录
 	 */
-	async delete(userId: string, modelId: string, type: 'LIKE' | 'FAVORITE'): Promise<boolean> {
+	async delete(externalUserId: string, modelId: string, type: 'LIKE' | 'FAVORITE'): Promise<boolean> {
 		const result = await db
 			.delete(modelInteractions)
 			.where(
 				and(
-					eq(modelInteractions.userId, userId),
+					eq(modelInteractions.externalUserId, externalUserId),
 					eq(modelInteractions.modelId, modelId),
 					eq(modelInteractions.type, type),
 				),
@@ -63,7 +63,7 @@ export class InteractionRepository {
 	 * 查询用户的所有点赞
 	 */
 	async findUserLikes(
-		userId: string,
+		externalUserId: string,
 		options: { limit?: number; offset?: number } = {},
 	): Promise<ModelInteraction[]> {
 		const { limit = 20, offset = 0 } = options;
@@ -71,7 +71,7 @@ export class InteractionRepository {
 		return db
 			.select()
 			.from(modelInteractions)
-			.where(and(eq(modelInteractions.userId, userId), eq(modelInteractions.type, 'LIKE')))
+			.where(and(eq(modelInteractions.externalUserId, externalUserId), eq(modelInteractions.type, 'LIKE')))
 			.orderBy(modelInteractions.createdAt)
 			.limit(limit)
 			.offset(offset);
@@ -81,7 +81,7 @@ export class InteractionRepository {
 	 * 查询用户的所有收藏
 	 */
 	async findUserFavorites(
-		userId: string,
+		externalUserId: string,
 		options: { limit?: number; offset?: number } = {},
 	): Promise<ModelInteraction[]> {
 		const { limit = 20, offset = 0 } = options;
@@ -89,7 +89,7 @@ export class InteractionRepository {
 		return db
 			.select()
 			.from(modelInteractions)
-			.where(and(eq(modelInteractions.userId, userId), eq(modelInteractions.type, 'FAVORITE')))
+			.where(and(eq(modelInteractions.externalUserId, externalUserId), eq(modelInteractions.type, 'FAVORITE')))
 			.orderBy(modelInteractions.createdAt)
 			.limit(limit)
 			.offset(offset);
@@ -98,30 +98,30 @@ export class InteractionRepository {
 	/**
 	 * 批量查询用户对多个模型的交互状态
 	 */
-	async findBatchInteractions(userId: string, modelIds: string[]): Promise<ModelInteraction[]> {
+	async findBatchInteractions(externalUserId: string, modelIds: string[]): Promise<ModelInteraction[]> {
 		if (modelIds.length === 0) return [];
 
 		return db
 			.select()
 			.from(modelInteractions)
 			.where(
-				and(eq(modelInteractions.userId, userId), inArray(modelInteractions.modelId, modelIds)),
+				and(eq(modelInteractions.externalUserId, externalUserId), inArray(modelInteractions.modelId, modelIds)),
 			);
 	}
 
 	/**
 	 * 检查用户是否点赞了模型
 	 */
-	async hasLiked(userId: string, modelId: string): Promise<boolean> {
-		const interaction = await this.findByUserModelAndType(userId, modelId, 'LIKE');
+	async hasLiked(externalUserId: string, modelId: string): Promise<boolean> {
+		const interaction = await this.findByUserModelAndType(externalUserId, modelId, 'LIKE');
 		return !!interaction;
 	}
 
 	/**
 	 * 检查用户是否收藏了模型
 	 */
-	async hasFavorited(userId: string, modelId: string): Promise<boolean> {
-		const interaction = await this.findByUserModelAndType(userId, modelId, 'FAVORITE');
+	async hasFavorited(externalUserId: string, modelId: string): Promise<boolean> {
+		const interaction = await this.findByUserModelAndType(externalUserId, modelId, 'FAVORITE');
 		return !!interaction;
 	}
 }

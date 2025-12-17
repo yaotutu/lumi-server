@@ -4,7 +4,6 @@ import { index, int, mysqlTable, text, timestamp, varchar } from 'drizzle-orm/my
 import { modelSourceEnum, modelVisibilityEnum, printStatusEnum } from './enums.js';
 import { generatedImages } from './generated-images.js';
 import { generationRequests } from './generation-requests.js';
-import { users } from './users.js';
 
 /**
  * 模型表（统一管理 AI 生成和用户上传）
@@ -17,7 +16,7 @@ export const models = mysqlTable(
 			.primaryKey()
 			.$defaultFn(() => createId()),
 
-		userId: varchar('user_id', { length: 36 }).notNull(),
+		externalUserId: varchar('external_user_id', { length: 36 }).notNull(),
 
 		// 来源标识
 		source: modelSourceEnum.notNull().default('AI_GENERATED'),
@@ -63,7 +62,7 @@ export const models = mysqlTable(
 		errorMessage: text('error_message'),
 	},
 	(table) => [
-		index('user_id_created_at_idx').on(table.userId, table.createdAt),
+		index('external_user_id_created_at_idx').on(table.externalUserId, table.createdAt),
 		index('source_idx').on(table.source),
 		index('visibility_published_at_idx').on(table.visibility, table.publishedAt),
 		index('visibility_like_count_idx').on(table.visibility, table.likeCount),
@@ -74,10 +73,6 @@ export const models = mysqlTable(
 
 // 定义关系
 export const modelsRelations = relations(models, ({ one, many }) => ({
-	user: one(users, {
-		fields: [models.userId],
-		references: [users.id],
-	}),
 	request: one(generationRequests, {
 		fields: [models.requestId],
 		references: [generationRequests.id],

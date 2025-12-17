@@ -24,14 +24,14 @@ import { transformToProxyUrl } from '@/utils/url-transformer';
  * 处理 3D 模型生成任务
  */
 async function processModelJob(job: Job<ModelJobData>) {
-	const { jobId, modelId, imageUrl, requestId, userId } = job.data;
+	const { jobId, modelId, imageUrl, requestId, externalUserId } = job.data;
 
 	logger.info({
 		msg: '▶️ 开始处理3D模型生成任务',
 		jobId,
 		modelId,
 		requestId,
-		userId,
+		externalUserId,
 		attempt: job.attemptsMade + 1,
 	});
 

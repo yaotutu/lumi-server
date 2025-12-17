@@ -2,7 +2,6 @@ import { createId } from '@paralleldrive/cuid2';
 import { relations } from 'drizzle-orm';
 import { index, int, mysqlTable, text, timestamp, varchar } from 'drizzle-orm/mysql-core';
 import { requestPhaseEnum, requestStatusEnum } from './enums.js';
-import { users } from './users.js';
 
 /**
  * 生成请求表（主任务）
@@ -15,7 +14,7 @@ export const generationRequests = mysqlTable(
 			.primaryKey()
 			.$defaultFn(() => createId()),
 
-		userId: varchar('user_id', { length: 36 }).notNull(),
+		externalUserId: varchar('external_user_id', { length: 36 }).notNull(),
 		prompt: text('prompt').notNull(),
 
 		// 状态管理
@@ -32,17 +31,13 @@ export const generationRequests = mysqlTable(
 		completedAt: timestamp('completed_at'),
 	},
 	(table) => [
-		index('user_id_created_at_idx').on(table.userId, table.createdAt),
+		index('external_user_id_created_at_idx').on(table.externalUserId, table.createdAt),
 		index('status_phase_idx').on(table.status, table.phase),
 	],
 );
 
 // 定义关系
 export const generationRequestsRelations = relations(generationRequests, ({ one, many }) => ({
-	user: one(users, {
-		fields: [generationRequests.userId],
-		references: [users.id],
-	}),
 	images: many(generatedImages),
 	model: one(models),
 }));

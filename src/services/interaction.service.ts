@@ -17,7 +17,7 @@ export async function toggleLike(
 		const updatedModel = await modelRepository.findById(modelId);
 		return { liked: false, likeCount: updatedModel?.likeCount || 0 };
 	}
-	await interactionRepository.create({ userId, modelId, type: 'LIKE' });
+	await interactionRepository.create({ externalUserId: userId, modelId, type: 'LIKE' });
 	await modelRepository.incrementLikeCount(modelId);
 	const updatedModel = await modelRepository.findById(modelId);
 	return { liked: true, likeCount: updatedModel?.likeCount || 0 };
@@ -36,7 +36,7 @@ export async function toggleFavorite(
 		const updatedModel = await modelRepository.findById(modelId);
 		return { favorited: false, favoriteCount: updatedModel?.favoriteCount || 0 };
 	}
-	await interactionRepository.create({ userId, modelId, type: 'FAVORITE' });
+	await interactionRepository.create({ externalUserId: userId, modelId, type: 'FAVORITE' });
 	await modelRepository.incrementFavoriteCount(modelId);
 	const updatedModel = await modelRepository.findById(modelId);
 	return { favorited: true, favoriteCount: updatedModel?.favoriteCount || 0 };

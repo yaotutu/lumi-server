@@ -95,7 +95,7 @@ export async function createModelForRequest(requestId: string, imageIndex: numbe
 	const modelId = createId();
 	const model = await modelRepository.create({
 		id: modelId,
-		userId: request.userId,
+		externalUserId: request.externalUserId,
 		requestId,
 		sourceImageId: selectedImage.id,
 		name: modelName,
@@ -125,13 +125,13 @@ export async function updateModel(
 	data: { name?: string; description?: string },
 ) {
 	const model = await getModelById(modelId);
-	if (model.userId !== userId) throw new ForbiddenError('无权限修改此模型');
+	if (model.externalUserId !== userId) throw new ForbiddenError('无权限修改此模型');
 	return modelRepository.update(modelId, data);
 }
 
 export async function publishModel(modelId: string, userId: string) {
 	const model = await getModelById(modelId);
-	if (model.userId !== userId) throw new ForbiddenError('无权限发布此模型');
+	if (model.externalUserId !== userId) throw new ForbiddenError('无权限发布此模型');
 	if (!model.completedAt || !model.modelUrl)
 		throw new InvalidStateError('模型尚未生成完成，无法发布');
 	return modelRepository.updateVisibility(modelId, 'PUBLIC');
@@ -139,7 +139,7 @@ export async function publishModel(modelId: string, userId: string) {
 
 export async function unpublishModel(modelId: string, userId: string) {
 	const model = await getModelById(modelId);
-	if (model.userId !== userId) throw new ForbiddenError('无权限操作此模型');
+	if (model.externalUserId !== userId) throw new ForbiddenError('无权限操作此模型');
 	return modelRepository.updateVisibility(modelId, 'PRIVATE');
 }
 
@@ -162,7 +162,7 @@ function extractS3KeyFromUrl(url: string): string | null {
 
 export async function deleteModel(modelId: string, userId: string) {
 	const model = await getModelById(modelId);
-	if (model.userId !== userId) throw new ForbiddenError('无权限删除此模型');
+	if (model.externalUserId !== userId) throw new ForbiddenError('无权限删除此模型');
 
 	// 删除模型相关的所有 S3 文件
 	const fileUrls = [model.modelUrl, model.mtlUrl, model.textureUrl, model.previewImageUrl].filter(
