@@ -17,6 +17,7 @@
 import type { Worker } from 'bullmq';
 import { logger } from '@/utils/logger';
 import { redisClient } from '@/utils/redis-client';
+import { ssePubSubService } from '@/services/sse-pubsub.service';
 import { createImageWorker } from './image.worker.js';
 import { createModelWorker } from './model.worker.js';
 
@@ -32,6 +33,10 @@ async function startWorkers() {
 		// 测试 Redis 连接
 		await redisClient.ping();
 		logger.info({ msg: '✅ Redis 连接成功' });
+
+		// 初始化 SSE Pub/Sub 服务（Worker 只需要发布功能）
+		await ssePubSubService.initialize();
+		logger.info({ msg: '✅ SSE Pub/Sub 服务已初始化' });
 
 		// 启动 Image Worker
 		const imageWorker = createImageWorker();
@@ -71,6 +76,10 @@ async function gracefulShutdown(signal: string) {
 		// 关闭所有 Workers
 		await Promise.all(workers.map((worker) => worker.close()));
 		logger.info({ msg: '✅ 所有 Workers 已关闭' });
+
+		// 关闭 SSE Pub/Sub 服务
+		await ssePubSubService.close();
+		logger.info({ msg: '✅ SSE Pub/Sub 服务已关闭' });
 
 		// 断开 Redis 连接
 		await redisClient.disconnect();

@@ -1,13 +1,13 @@
 /**
  * Fastify 认证中间件（改造为 Bearer Token 验证）
  *
- * 职责：验证用户身份，并通过请求头传递用户信息
+ * 职责：验证用户身份，并通过 request.user 对象传递用户信息
  *
  * 架构设计：
  * - 从 Authorization Header 获取 Bearer Token
  * - 调用外部用户服务验证 Token
  * - 查找或创建本地用户映射
- * - 通过请求头 (x-user-id) 传递用户信息给路由处理器
+ * - 通过 request.user 对象传递用户信息给路由处理器
  * - 认证失败时，返回 401 + JSend 错误格式
  *
  * 使用方式：
@@ -83,10 +83,12 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
 		});
 	}
 
-	// 直接将外部用户ID传递给路由处理器（不再需要本地用户表）
-	request.headers['x-user-id'] = externalUser.user_id;
-	request.headers['x-external-user-id'] = externalUser.user_id;
-	request.headers['x-user-email'] = externalUser.email;
+	// ✅ 安全：使用 request 对象属性传递用户信息（客户端无法伪造）
+	request.user = {
+		id: externalUser.user_id,
+		email: externalUser.email,
+		userName: externalUser.user_name,
+	};
 
 	logger.debug({
 		msg: '✅ 认证通过',

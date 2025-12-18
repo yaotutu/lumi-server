@@ -3,6 +3,8 @@ import { config } from './config/index.js';
 import { closeDatabase, testConnection } from './db/drizzle.js';
 import { logger } from './utils/logger.js';
 import { redisClient } from './utils/redis-client.js';
+import { ssePubSubService } from './services/sse-pubsub.service.js';
+import { sseConnectionManager } from './services/sse-connection-manager.js';
 
 /**
  * API Server 启动入口
@@ -28,6 +30,26 @@ async function start() {
 		}
 
 		logger.info('✅ Database and Redis connected successfully');
+
+		// 初始化 SSE Pub/Sub 服务
+		await ssePubSubService.initialize();
+
+		// 订阅 Redis 事件并转发给 SSE 连接
+		await ssePubSubService.subscribe((message) => {
+			logger.debug({
+				taskId: message.taskId,
+				eventType: message.eventType,
+			}, '收到 Redis SSE 事件，转发给本地连接');
+
+			// 推送给本地 SSE 连接
+			sseConnectionManager.sendToLocalConnections(
+				message.taskId,
+				message.eventType,
+				message.data,
+			);
+		});
+
+		logger.info('✅ SSE Pub/Sub service initialized and subscribed');
 
 		// 构建应用
 		const app = await buildApp();
@@ -55,6 +77,7 @@ async function start() {
 
 				try {
 					await app.close();
+					await ssePubSubService.close();
 					await redisClient.disconnect();
 					await closeDatabase();
 					logger.info('API Server closed successfully');

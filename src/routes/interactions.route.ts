@@ -26,7 +26,7 @@ export async function interactionRoutes(fastify: FastifyInstance) {
 		async (request, reply) => {
 			try {
 				const { id: modelId } = request.params;
-				const userId = request.headers['x-user-id'] as string;
+				const userId = request.user?.id;
 
 				// 用户未登录
 				if (!userId) {
@@ -56,7 +56,11 @@ export async function interactionRoutes(fastify: FastifyInstance) {
 					}),
 				);
 			} catch (error) {
-				logger.error({ msg: '获取交互状态失败', error, modelId: request.params.id });
+				logger.error({
+					msg: '获取交互状态失败',
+					error,
+					modelId: request.params.id,
+				});
 				return reply.code(500).send(fail('获取交互状态失败'));
 			}
 		},
@@ -78,7 +82,17 @@ export async function interactionRoutes(fastify: FastifyInstance) {
 		try {
 			const { id: modelId } = request.params;
 			const { type } = request.body;
-			const userId = (request.headers['x-user-id'] as string) || 'test-user-id';
+			const userId = request.user?.id;
+
+			if (!userId) {
+				return reply.status(401).send({
+					status: 'fail',
+					data: {
+						message: '请先登录',
+						code: 'UNAUTHORIZED',
+					},
+				});
+			}
 
 			// 验证参数
 			if (!type || (type !== 'LIKE' && type !== 'FAVORITE')) {
@@ -158,7 +172,7 @@ export async function interactionRoutes(fastify: FastifyInstance) {
 		{ schema: batchInteractionsSchema },
 		async (request, reply) => {
 			try {
-				const userId = request.headers['x-user-id'] as string;
+				const userId = request.user?.id;
 				const { modelIds } = request.body;
 
 				// 验证参数

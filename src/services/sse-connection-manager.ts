@@ -13,6 +13,7 @@
 
 import type { FastifyReply } from 'fastify';
 import { logger } from '@/utils/logger.js';
+import { ssePubSubService } from './sse-pubsub.service.js';
 
 /**
  * SSE 事件类型
@@ -124,33 +125,70 @@ class SSEConnectionManager {
 
 	/**
 	 * 向指定任务的所有连接推送事件
+	 *
+	 * **重要**: 此方法通过 Redis Pub/Sub 发布事件
+	 * - Worker 进程调用此方法时，事件会通过 Redis 发布
+	 * - API Server 订阅 Redis 事件后，会调用 sendToLocalConnections 推送给实际的 SSE 连接
+	 *
 	 * @param taskId 任务 ID
 	 * @param eventType 事件类型
 	 * @param data 事件数据（将被序列化为 JSON）
 	 */
 	async broadcast(taskId: string, eventType: SSEEventType, data: unknown): Promise<void> {
+		logger.info({
+			msg: '📡 SSE 推送',
+			requestId: taskId,
+			eventType,
+			dataKeys: typeof data === 'object' && data !== null ? Object.keys(data) : undefined,
+		});
+
+		try {
+			// 通过 Redis Pub/Sub 发布事件
+			await ssePubSubService.publish(taskId, eventType, data as Record<string, any>);
+		} catch (error) {
+			logger.error({
+				error,
+				taskId,
+				eventType,
+			}, 'Failed to publish SSE event via Redis');
+
+			// 如果 Redis 发布失败，尝试本地推送（作为降级方案）
+			this.sendToLocalConnections(taskId, eventType, data);
+		}
+	}
+
+	/**
+	 * 直接向本地连接推送事件（不经过 Redis）
+	 *
+	 * **用途**:
+	 * - API Server 接收到 Redis Pub/Sub 事件后调用此方法
+	 * - task:init 事件（连接建立时立即发送，不经过 Redis）
+	 *
+	 * @param taskId 任务 ID
+	 * @param eventType 事件类型
+	 * @param data 事件数据
+	 */
+	sendToLocalConnections(taskId: string, eventType: SSEEventType, data: unknown): void {
 		const taskConnections = this.connections.get(taskId);
 
 		if (!taskConnections || taskConnections.size === 0) {
-			logger.warn({
-				msg: '没有找到任务的 SSE 连接，跳过推送',
+			logger.debug({
+				msg: '没有找到任务的本地 SSE 连接',
 				taskId,
 				eventType,
-				processId: process.pid, // 记录进程 ID
-				instanceId: this.instanceId, // 记录实例 ID
-				当前所有连接: Array.from(this.connections.keys()),
+				processId: process.pid,
+				instanceId: this.instanceId,
 			});
 			return;
 		}
 
 		logger.info({
-			msg: '推送 SSE 事件',
+			msg: '✅ 推送到本地 SSE 连接',
 			taskId,
 			eventType,
-			processId: process.pid, // 记录进程 ID
-			instanceId: this.instanceId, // 记录实例 ID
+			processId: process.pid,
+			instanceId: this.instanceId,
 			connectionCount: taskConnections.size,
-			data,
 		});
 
 		// 构造 SSE 消息

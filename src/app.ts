@@ -41,7 +41,7 @@ export async function buildApp() {
 	await app.register(cors, {
 		origin: config.cors.origins, // 使用具体的前端域名列表
 		methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], // 明确允许的 HTTP 方法
-		allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id'], // 允许的请求头
+		allowedHeaders: ['Content-Type', 'Authorization'], // 允许的请求头
 	});
 
 	// 限流
@@ -86,11 +86,11 @@ export async function buildApp() {
 			],
 			components: {
 				securitySchemes: {
-					headerAuth: {
-						type: 'apiKey',
-						in: 'header',
-						name: 'x-user-id',
-						description: '用户 ID Header（通过 Bearer Token 认证后设置）',
+					bearerAuth: {
+						type: 'http',
+						scheme: 'bearer',
+						bearerFormat: 'JWT',
+						description: 'Bearer Token 认证（Authorization: Bearer <token>）',
 					},
 				},
 			},
