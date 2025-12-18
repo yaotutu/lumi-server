@@ -74,7 +74,6 @@ async function start() {
 			},
 			'Failed to start API server',
 		);
-		console.error('API server startup error:', error);
 		process.exit(1);
 	}
 }

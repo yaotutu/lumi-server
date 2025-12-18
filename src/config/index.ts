@@ -1,5 +1,6 @@
 import { config as dotenvConfig } from 'dotenv';
 import { z } from 'zod';
+import { logger } from '../utils/logger.js';
 
 // 强制覆盖已存在的环境变量，确保 .env 文件优先级最高
 dotenvConfig({ override: true });
@@ -75,8 +76,12 @@ const envSchema = z.object({
 const parseResult = envSchema.safeParse(process.env);
 
 if (!parseResult.success) {
-	console.error('❌ 环境变量验证失败:');
-	console.error(parseResult.error.format());
+	logger.fatal(
+		{
+			error: parseResult.error.format(),
+		},
+		'❌ 环境变量验证失败',
+	);
 	process.exit(1);
 }
 

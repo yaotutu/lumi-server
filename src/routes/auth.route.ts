@@ -16,10 +16,10 @@
  */
 
 import type { FastifyInstance } from 'fastify';
-import { logger } from '@/utils/logger';
-import { success, fail } from '@/utils/response';
 import { getUserServiceClient } from '@/clients/user-service.client';
 import config from '@/config/index';
+import { logger } from '@/utils/logger';
+import { fail, success } from '@/utils/response';
 
 /**
  * 注册认证路由

@@ -7,9 +7,9 @@
  * - 保持接口不变，避免影响认证中间件
  */
 
-import { logger } from '@/utils/logger';
 import { getUserServiceClient } from '@/clients/user-service.client';
 import config from '@/config/index';
+import { logger } from '@/utils/logger';
 
 /**
  * 外部用户服务返回的用户信息

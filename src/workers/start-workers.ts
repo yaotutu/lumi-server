@@ -57,7 +57,6 @@ async function startWorkers() {
 						}
 					: error,
 		});
-		console.error('详细错误:', error);
 		process.exit(1);
 	}
 }

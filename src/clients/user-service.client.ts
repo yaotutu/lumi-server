@@ -15,9 +15,9 @@
  */
 
 import type {
+	UserInfoData,
 	UserServiceClientConfig,
 	VerifyCodeType,
-	UserInfoData,
 } from '../types/user-service.types.js';
 import { logger } from '../utils/logger.js';
 

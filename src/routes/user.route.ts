@@ -13,7 +13,7 @@
 
 import type { FastifyInstance } from 'fastify';
 import { logger } from '@/utils/logger';
-import { success, fail } from '@/utils/response';
+import { fail, success } from '@/utils/response';
 
 const USER_SERVICE_BASE_URL = process.env.USER_SERVICE_URL || 'http://user.ai3d.top';
 

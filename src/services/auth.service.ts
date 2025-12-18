@@ -8,8 +8,8 @@
  * @deprecated 用户管理已迁移到外部服务，本文件保留仅用于验证码功能
  */
 
-import { logger } from '@/utils/logger';
 import { ValidationError } from '@/utils/errors';
+import { logger } from '@/utils/logger';
 
 /**
  * 发送验证码
