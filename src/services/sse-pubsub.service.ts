@@ -46,22 +46,19 @@ class SSEPubSubService {
 			return;
 		}
 
-		// 创建发布者连接
+		// 创建发布者连接 - 使用更保守的服务器配置
 		this.publisher = new Redis({
 			host: config.redis.host,
 			port: config.redis.port,
 			password: config.redis.password || undefined,
 			db: config.redis.db,
-			// 连接超时
-			connectTimeout: 10000,
-			// 命令超时
-			commandTimeout: 10000,
-			// TCP keep-alive
-			keepAlive: 30000,
-			// 最大重试次数
-			maxRetriesPerRequest: 3,
-			// 启用连接监控
-			enableReadyCheck: true,
+			// 增加超时时间以适应服务器环境
+			connectTimeout: 20000,
+			commandTimeout: 20000,
+			// 使用更宽松的重试配置
+			maxRetriesPerRequest: null, // BullMQ 要求
+			lazyConnect: true,
+			// 移除可能有问题的配置以提高服务器兼容性
 		});
 
 		// 创建订阅者连接（订阅者需要独立的连接）
@@ -70,11 +67,10 @@ class SSEPubSubService {
 			port: config.redis.port,
 			password: config.redis.password || undefined,
 			db: config.redis.db,
-			connectTimeout: 10000,
-			commandTimeout: 10000,
-			keepAlive: 30000,
-			maxRetriesPerRequest: 3,
-			enableReadyCheck: true,
+			connectTimeout: 20000,
+			commandTimeout: 20000,
+			maxRetriesPerRequest: null,
+			lazyConnect: true,
 		});
 
 		// 监听发布者错误

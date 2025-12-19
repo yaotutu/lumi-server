@@ -70,36 +70,34 @@ class RedisClient {
 				},
 			);
 		} else {
-			// 单节点模式
+			// 单节点模式 - 适配服务器环境
 			logger.info('使用 Redis 单节点模式');
 			this.client = new Redis({
 				host: config.redis.host,
 				port: config.redis.port,
 				password: config.redis.password,
 				db: config.redis.db,
-				tls: config.redis.tls ? {} : undefined, // 启用 TLS
-				// 连接超时设置（10 秒）
-				connectTimeout: 10000,
-				// 命令超时设置（增加到 10 秒，避免 BullMQ 心跳超时）
-				commandTimeout: 10000,
-				// TCP keep-alive - 防止空闲连接被关闭
-				keepAlive: 30000, // 30 秒
-				// 连接池设置
-				maxRetriesPerRequest: null, // BullMQ 要求必须为 null
-				// 网络重连策略
+				tls: config.redis.tls ? {} : undefined,
+				// 增加超时时间以适应服务器环境
+				connectTimeout: 20000,
+				commandTimeout: 20000,
+				// 移除 keep-alive 以提高服务器兼容性
+				// keepAlive: 30000, // 服务器环境可能不稳定
+				// BullMQ 要求的配置
+				maxRetriesPerRequest: null,
+				// 更保守的重连策略
 				retryStrategy: (times) => {
-					if (times > 3) {
+					if (times > 5) { // 增加重试次数
 						logger.error('Redis 连接失败，已达到最大重试次数');
-						return null; // 停止重试
+						return null;
 					}
-					const delay = Math.min(times * 1000, 3000);
+					const delay = Math.min(times * 2000, 10000); // 更长的延迟
 					logger.warn(`Redis 重试第 ${times} 次，延迟 ${delay}ms`);
 					return delay;
 				},
-				// 启用连接监控
 				enableReadyCheck: true,
-				// 空闲超时 - 0 表示不自动断开
 				lazyConnect: false,
+				// 服务器环境稳定性配置 - 使用简化配置
 			});
 		}
 
