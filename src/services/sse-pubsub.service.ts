@@ -36,17 +36,30 @@ class SSEPubSubService {
 	private publisher: Redis | null = null;
 	private subscriber: Redis | null = null;
 	private eventHandlers: Map<string, (message: SSEEventMessage) => void> = new Map();
+	private isSubscribed = false; // 添加订阅状态标记
 
 	/**
 	 * 初始化 Redis 连接（完整版本 - 用于 API Server）
 	 */
 	async initialize(): Promise<void> {
+		logger.info('🚀 开始初始化 SSE Pub/Sub 服务 (完整模式)...');
+		const redisConfig = {
+			host: config.redis.host,
+			port: config.redis.port,
+			db: config.redis.db,
+			hasPassword: !!config.redis.password,
+			connectTimeout: '20000ms',
+			commandTimeout: '20000ms',
+		};
+		logger.info('📋 Redis 配置: ' + JSON.stringify(redisConfig));
+
 		if (this.publisher && this.subscriber) {
-			logger.warn('SSE Pub/Sub already initialized');
+			logger.warn('⚠️ SSE Pub/Sub 已经初始化，跳过重复初始化');
 			return;
 		}
 
 		// 创建发布者连接 - 使用更保守的服务器配置
+		logger.info('📡 创建 Redis Publisher 连接...');
 		this.publisher = new Redis({
 			host: config.redis.host,
 			port: config.redis.port,
@@ -61,7 +74,33 @@ class SSEPubSubService {
 			// 移除可能有问题的配置以提高服务器兼容性
 		});
 
+		// 监听发布者连接事件
+		this.publisher.on('connect', () => {
+			logger.info('✅ Redis Publisher 连接成功');
+		});
+
+		this.publisher.on('ready', () => {
+			logger.info('✅ Redis Publisher 就绪');
+		});
+
+		this.publisher.on('close', () => {
+			logger.warn('⚠️ Redis Publisher 连接关闭');
+		});
+
+		this.publisher.on('reconnecting', () => {
+			logger.info('🔄 Redis Publisher 重新连接中...');
+		});
+
+		this.publisher.on('error', (error) => {
+			logger.error({
+				error: error.message,
+				errorName: error.name,
+				errorStack: error.stack?.substring(0, 500) // 限制堆栈长度
+			}, '❌ Redis Publisher 错误');
+		});
+
 		// 创建订阅者连接（订阅者需要独立的连接）
+		logger.info('📡 创建 Redis Subscriber 连接...');
 		this.subscriber = new Redis({
 			host: config.redis.host,
 			port: config.redis.port,
@@ -73,17 +112,32 @@ class SSEPubSubService {
 			lazyConnect: true,
 		});
 
-		// 监听发布者错误
-		this.publisher.on('error', (error) => {
-			logger.error({ error }, 'Redis publisher error');
+		// 监听订阅者连接事件
+		this.subscriber.on('connect', () => {
+			logger.info('✅ Redis Subscriber 连接成功');
 		});
 
-		// 监听订阅者错误
+		this.subscriber.on('ready', () => {
+			logger.info('✅ Redis Subscriber 就绪');
+		});
+
+		this.subscriber.on('close', () => {
+			logger.warn('⚠️ Redis Subscriber 连接关闭');
+		});
+
+		this.subscriber.on('reconnecting', () => {
+			logger.info('🔄 Redis Subscriber 重新连接中...');
+		});
+
 		this.subscriber.on('error', (error) => {
-			logger.error({ error }, 'Redis subscriber error');
+			logger.error({
+				error: error.message,
+				errorName: error.name,
+				errorStack: error.stack?.substring(0, 500) // 限制堆栈长度
+			}, '❌ Redis Subscriber 错误');
 		});
 
-		logger.info('SSE Pub/Sub service initialized (full mode - publisher + subscriber)');
+		logger.info('✅ SSE Pub/Sub 服务初始化完成 (完整模式 - publisher + subscriber)');
 	}
 
 	/**
@@ -125,38 +179,132 @@ class SSEPubSubService {
 	 * @param handler 事件处理函数
 	 */
 	async subscribe(handler: (message: SSEEventMessage) => void): Promise<void> {
+		logger.info('🔔 开始订阅 SSE 事件...');
+
 		if (!this.subscriber) {
-			throw new Error('SSE Pub/Sub not initialized');
+			const error = new Error('SSE Pub/Sub not initialized - subscriber is null');
+			logger.error({ error: error.message }, '❌ SSE 订阅失败: 服务未初始化');
+			throw error;
+		}
+
+		// 检查 subscriber 连接状态
+		logger.info('📡 检查 Subscriber 连接状态...');
+		const subscriberStatus = this.subscriber.status;
+		logger.info('📊 Subscriber 状态: ' + subscriberStatus);
+
+		if (subscriberStatus !== 'ready') {
+			logger.warn('⚠️ Subscriber 状态不是 ready，当前状态: ' + subscriberStatus);
 		}
 
 		// 保存处理器
 		const handlerId = Math.random().toString(36).substring(7);
 		this.eventHandlers.set(handlerId, handler);
+		logger.info(`📝 注册事件处理器 ID: ${handlerId}，总处理器数量: ${this.eventHandlers.size}`);
 
-		// 如果是第一次订阅，开始监听
+		// 如果是第一次订阅，设置消息监听器（只设置一次！）
 		if (this.eventHandlers.size === 1) {
-			await this.subscriber.subscribe(SSE_CHANNEL);
+			logger.info('🔍 首次订阅，设置消息监听器...');
 
+			// 设置消息监听器（只设置一次）
 			this.subscriber.on('message', (channel, message) => {
-				if (channel !== SSE_CHANNEL) return;
+				const timestamp = new Date().toISOString();
+				logger.debug({
+					timestamp,
+					channel,
+					messageLength: message?.length || 0,
+					messagePreview: message?.substring(0, 100)
+				}, '📡 收到 Redis 消息');
+
+				if (channel !== SSE_CHANNEL) {
+					logger.warn({
+						timestamp,
+						expectedChannel: SSE_CHANNEL,
+						actualChannel: channel
+					}, '⚠️ 收到非预期的频道消息');
+					return;
+				}
 
 				try {
 					const event: SSEEventMessage = JSON.parse(message);
+					logger.info({
+						timestamp,
+						taskId: event.taskId,
+						eventType: event.eventType,
+						dataKeys: Object.keys(event.data || {})
+					}, '🎯 解析 SSE 事件成功');
 
 					// 调用所有处理器
-					for (const h of this.eventHandlers.values()) {
+					const handlerCount = this.eventHandlers.size;
+					let successCount = 0;
+					let errorCount = 0;
+
+					for (const [handlerId, h] of this.eventHandlers.entries()) {
 						try {
 							h(event);
-						} catch (error) {
-							logger.error({ error, event }, 'SSE event handler error');
+							successCount++;
+							logger.debug(`✅ 处理器 ${handlerId} 执行成功`);
+						} catch (err) {
+							errorCount++;
+							const error = err as Error;
+							logger.error({
+								timestamp,
+								handlerId,
+								error: error.message,
+								errorName: error.name,
+								event
+							}, '❌ SSE 事件处理器执行失败');
 						}
 					}
-				} catch (error) {
-					logger.error({ error, message }, 'Failed to parse SSE message');
+
+					logger.info({
+						timestamp,
+						handlerCount,
+						successCount,
+						errorCount
+					}, '📊 SSE 事件处理器执行统计');
+
+				} catch (err) {
+					const error = err as Error;
+					logger.error({
+						timestamp,
+						error: error.message,
+						errorName: error.name,
+						message: message?.substring(0, 200) // 限制消息长度
+					}, '❌ 解析 SSE 消息失败');
 				}
 			});
 
-			logger.info({ channel: SSE_CHANNEL }, 'Subscribed to SSE channel');
+			logger.info({ channel: SSE_CHANNEL }, '✅ SSE 消息监听器设置完成');
+		} else {
+			logger.info(`📝 已有 ${this.eventHandlers.size} 个处理器，跳过重复设置监听器`);
+		}
+
+		// 订阅频道
+		logger.info(`📢 准备订阅频道: ${SSE_CHANNEL}`);
+
+		try {
+			const subscribeResult = await this.subscriber.subscribe(SSE_CHANNEL);
+			this.isSubscribed = true;
+
+			logger.info({
+				channel: SSE_CHANNEL,
+				subscribeResult,
+				handlersCount: this.eventHandlers.size,
+				timestamp: new Date().toISOString()
+			}, '✅ SSE 频道订阅成功');
+
+		} catch (err) {
+			const error = err as Error;
+			logger.error({
+				channel: SSE_CHANNEL,
+				error: error.message,
+				errorName: error.name,
+				errorStack: error.stack?.substring(0, 500),
+				handlersCount: this.eventHandlers.size
+			}, '❌ SSE 频道订阅失败');
+
+			this.isSubscribed = false;
+			throw error;
 		}
 	}
 
@@ -168,9 +316,31 @@ class SSEPubSubService {
 	 * @param data 事件数据
 	 */
 	async publish(taskId: string, eventType: SSEEventType, data: Record<string, any>): Promise<void> {
+		logger.info({
+			timestamp: new Date().toISOString(),
+			taskId,
+			eventType,
+			dataKeys: Object.keys(data)
+		}, '📤 准备发布 SSE 事件...');
+
 		if (!this.publisher) {
-			throw new Error('SSE Pub/Sub not initialized');
+			const error = new Error('SSE Pub/Sub not initialized - publisher is null');
+			logger.error({
+				timestamp: new Date().toISOString(),
+				error: error.message,
+				taskId,
+				eventType
+			}, '❌ SSE 发布失败: 服务未初始化');
+			throw error;
 		}
+
+		// 检查 publisher 连接状态
+		const publisherStatus = this.publisher.status;
+		logger.debug({
+			timestamp: new Date().toISOString(),
+			taskId,
+			publisherStatus
+		}, '📊 Publisher 状态检查');
 
 		const message: SSEEventMessage = {
 			taskId,
@@ -178,19 +348,46 @@ class SSEPubSubService {
 			data,
 		};
 
-		try {
-			await this.publisher.publish(SSE_CHANNEL, JSON.stringify(message));
+		const messageString = JSON.stringify(message);
+		logger.debug({
+			timestamp: new Date().toISOString(),
+			taskId,
+			eventType,
+			messageLength: messageString.length,
+			messagePreview: messageString.substring(0, 100)
+		}, '📝 SSE 消息序列化完成');
 
-			logger.debug(
-				{
-					taskId,
-					eventType,
-					dataKeys: Object.keys(data),
-				},
-				'Published SSE event to Redis',
-			);
-		} catch (error) {
-			logger.error({ error, taskId, eventType }, 'Failed to publish SSE event');
+		try {
+			logger.debug({
+				timestamp: new Date().toISOString(),
+				channel: SSE_CHANNEL,
+				taskId,
+				eventType
+			}, '🚀 开始发布到 Redis...');
+
+			const publishResult = await this.publisher.publish(SSE_CHANNEL, messageString);
+
+			logger.info({
+				timestamp: new Date().toISOString(),
+				channel: SSE_CHANNEL,
+				taskId,
+				eventType,
+				publishResult,
+				messageLength: messageString.length
+			}, '✅ SSE 事件发布成功');
+
+		} catch (err) {
+			const error = err as Error;
+			logger.error({
+				timestamp: new Date().toISOString(),
+				channel: SSE_CHANNEL,
+				error: error.message,
+				errorName: error.name,
+				errorStack: error.stack?.substring(0, 500),
+				taskId,
+				eventType,
+				messageLength: messageString.length
+			}, '❌ SSE 事件发布失败');
 			throw error;
 		}
 	}
@@ -199,19 +396,54 @@ class SSEPubSubService {
 	 * 关闭连接
 	 */
 	async close(): Promise<void> {
+		logger.info('🔚 开始关闭 SSE Pub/Sub 服务...');
+
+		const handlerCount = this.eventHandlers.size;
+		logger.info(`📊 当前有 ${handlerCount} 个事件处理器需要清理`);
+
 		if (this.subscriber) {
-			await this.subscriber.quit();
-			this.subscriber = null;
+			logger.info('📡 关闭 Subscriber 连接...');
+			try {
+				await this.subscriber.quit();
+				this.subscriber = null;
+				logger.info('✅ Subscriber 连接已关闭');
+			} catch (err) {
+				const error = err as Error;
+				logger.error({
+					error: error.message,
+					errorName: error.name
+				}, '❌ 关闭 Subscriber 连接时出错');
+			}
+		} else {
+			logger.info('⚠️ Subscriber 连接不存在，跳过关闭');
 		}
 
 		if (this.publisher) {
-			await this.publisher.quit();
-			this.publisher = null;
+			logger.info('📡 关闭 Publisher 连接...');
+			try {
+				await this.publisher.quit();
+				this.publisher = null;
+				logger.info('✅ Publisher 连接已关闭');
+			} catch (err) {
+				const error = err as Error;
+				logger.error({
+					error: error.message,
+					errorName: error.name
+				}, '❌ 关闭 Publisher 连接时出错');
+			}
+		} else {
+			logger.info('⚠️ Publisher 连接不存在，跳过关闭');
 		}
 
 		this.eventHandlers.clear();
+		const previousSubscribed = this.isSubscribed;
+		this.isSubscribed = false;
 
-		logger.info('SSE Pub/Sub service closed');
+		logger.info({
+			timestamp: new Date().toISOString(),
+			handlerCount,
+			wasSubscribed: previousSubscribed
+		}, '✅ SSE Pub/Sub 服务关闭完成');
 	}
 }
 
