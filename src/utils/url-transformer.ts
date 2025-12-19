@@ -1,23 +1,21 @@
 /**
  * URL 转换工具
  *
- * 将云存储的 S3 URL 转换为后端代理 URL
- * 前端收到的 URL 已经解决了跨域问题，可以直接使用
+ * 将云存储的 S3 URL 转换为后端代理 URL（相对路径）
+ * 前端收到后拼接完整 URL，已经解决了跨域问题，可以直接使用
  */
 
-import { config } from '../config/index.js';
-
 /**
- * 将 S3 URL 转换为后端代理 URL
+ * 将 S3 URL 转换为后端代理 URL（相对路径）
  *
  * @param url - 原始 URL（可能是 S3 URL）
  * @param type - URL 类型（image 或 model）
- * @returns 代理 URL 或原始 URL
+ * @returns 代理 URL 相对路径或原始 URL
  *
  * @example
- * // S3 URL 转换为代理 URL
+ * // S3 URL 转换为代理 URL 相对路径
  * transformToProxyUrl('https://ai3d-1375240212.cos.ap-guangzhou.myqcloud.com/images/xxx.png', 'image')
- * // => 'http://localhost:3000/api/proxy/image?url=https%3A%2F%2F...'
+ * // => '/api/proxy/image?url=https%3A%2F%2F...'
  *
  * @example
  * // null 或 undefined 安全处理
@@ -49,11 +47,11 @@ export function transformToProxyUrl(
 		return url;
 	}
 
-	// 构建代理 URL
-	const apiBaseUrl = config.server.publicUrl || `http://localhost:${config.server.port}`;
+	// 返回相对路径，由前端拼接完整 URL
+	// 前端已经知道后端地址（NEXT_PUBLIC_API_BASE_URL），无需在后端配置
 	const endpoint = type === 'image' ? '/api/proxy/image' : '/api/proxy/model';
 
-	return `${apiBaseUrl}${endpoint}?url=${encodeURIComponent(url)}`;
+	return `${endpoint}?url=${encodeURIComponent(url)}`;
 }
 
 /**

@@ -87,7 +87,8 @@ class RedisClient {
 				maxRetriesPerRequest: null,
 				// 更保守的重连策略
 				retryStrategy: (times) => {
-					if (times > 5) { // 增加重试次数
+					if (times > 5) {
+						// 增加重试次数
 						logger.error('Redis 连接失败，已达到最大重试次数');
 						return null;
 					}

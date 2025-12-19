@@ -82,10 +82,6 @@ const envSchema = z.object({
 
 	// 用户服务配置
 	USER_SERVICE_URL: z.string().default('http://user.ai3d.top'),
-
-	// 服务器公开访问 URL（用于生成代理 URL）
-	// TODO: 后期优化 - 配置 CORS 后，可不再需要代理
-	PUBLIC_URL: z.string().optional(),
 });
 
 const parseResult = envSchema.safeParse(process.env);
@@ -106,9 +102,6 @@ export const config = {
 	server: {
 		port: Number.parseInt(env.PORT, 10),
 		host: env.HOST,
-		// 公开访问 URL，用于生成代理 URL（如 http://192.168.88.100:3000）
-		// 如果未配置，默认使用 http://localhost:${PORT}
-		publicUrl: env.PUBLIC_URL,
 	},
 
 	logger: {
