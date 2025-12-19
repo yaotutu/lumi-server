@@ -19,6 +19,16 @@ const envSchema = z.object({
 	REDIS_PORT: z.string().default('6379'),
 	REDIS_PASSWORD: z.string().optional(),
 	REDIS_DB: z.string().default('0'),
+	// AWS MemoryDB/ElastiCache 需要启用 TLS
+	REDIS_TLS: z
+		.string()
+		.default('false')
+		.transform((val) => val === 'true'),
+	// 是否使用集群模式（AWS MemoryDB 集群配置端点需要启用）
+	REDIS_CLUSTER_MODE: z
+		.string()
+		.default('false')
+		.transform((val) => val === 'true'),
 
 	// S3 存储配置
 	S3_ENDPOINT: z.string().optional(),
@@ -112,6 +122,8 @@ export const config = {
 		port: Number.parseInt(env.REDIS_PORT, 10),
 		password: env.REDIS_PASSWORD,
 		db: Number.parseInt(env.REDIS_DB, 10),
+		tls: env.REDIS_TLS,
+		clusterMode: env.REDIS_CLUSTER_MODE,
 	},
 
 	s3: {

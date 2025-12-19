@@ -17,24 +17,37 @@ import { redisClient } from './utils/redis-client.js';
  */
 async function start() {
 	try {
+		logger.info('========================================');
+		logger.info('🚀 正在启动 API Server...');
+		logger.info('========================================');
+
 		// 测试数据库连接
+		logger.info('步骤 1/5: 测试数据库连接...');
 		const dbConnected = await testConnection();
 		if (!dbConnected) {
 			throw new Error('Database connection failed');
 		}
+		logger.info('✅ 数据库连接成功');
 
 		// 测试 Redis 连接
+		logger.info('步骤 2/5: 测试 Redis 连接...');
 		const redisConnected = await redisClient.isReady();
 		if (!redisConnected) {
-			throw new Error('Redis connection failed');
+			throw new Error(
+				'Redis connection failed - 请检查 Redis 配置（host, port, TLS, cluster mode）',
+			);
 		}
+		logger.info('✅ Redis 连接成功');
 
 		logger.info('✅ Database and Redis connected successfully');
 
 		// 初始化 SSE Pub/Sub 服务
+		logger.info('步骤 3/5: 初始化 SSE Pub/Sub 服务...');
 		await ssePubSubService.initialize();
+		logger.info('✅ SSE Pub/Sub 服务初始化成功');
 
 		// 订阅 Redis 事件并转发给 SSE 连接
+		logger.info('步骤 4/5: 订阅 Redis SSE 事件...');
 		await ssePubSubService.subscribe((message) => {
 			logger.debug(
 				{
@@ -51,22 +64,29 @@ async function start() {
 		logger.info('✅ SSE Pub/Sub service initialized and subscribed');
 
 		// 构建应用
+		logger.info('步骤 5/5: 构建 Fastify 应用...');
 		const app = await buildApp();
+		logger.info('✅ Fastify 应用构建成功');
 
 		// 启动服务器
+		logger.info('正在启动 HTTP 服务器...');
 		await app.listen({
 			port: config.server.port,
 			host: config.server.host,
 		});
 
+		logger.info('========================================');
 		logger.info(
 			{
 				port: config.server.port,
 				host: config.server.host,
 				env: config.env,
 			},
-			'🚀 API Server started successfully',
+			'🎉 API Server started successfully',
 		);
+		logger.info(`📡 服务地址: http://${config.server.host}:${config.server.port}`);
+		logger.info(`📚 API 文档: http://${config.server.host}:${config.server.port}/docs`);
+		logger.info('========================================');
 
 		// 优雅关闭
 		const signals = ['SIGINT', 'SIGTERM'];

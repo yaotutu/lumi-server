@@ -1,24 +1,86 @@
-import Redis from 'ioredis';
+import Redis, { Cluster } from 'ioredis';
 import { config } from '../config/index.js';
 import { logger } from './logger.js';
 
 class RedisClient {
-	private client: Redis;
+	private client: Redis | Cluster;
 	private isConnected = false;
 
 	constructor() {
-		this.client = new Redis({
-			host: config.redis.host,
-			port: config.redis.port,
-			password: config.redis.password,
-			db: config.redis.db,
-			retryStrategy: (times) => {
-				const delay = Math.min(times * 50, 2000);
-				logger.warn(`Redis retry attempt ${times}, delay: ${delay}ms`);
-				return delay;
+		// 输出 Redis 配置信息（用于调试）
+		logger.info(
+			{
+				host: config.redis.host,
+				port: config.redis.port,
+				db: config.redis.db,
+				tls: config.redis.tls,
+				clusterMode: config.redis.clusterMode,
+				hasPassword: !!config.redis.password,
 			},
-			maxRetriesPerRequest: null, // BullMQ 要求必须为 null
-		});
+			'正在初始化 Redis 客户端...',
+		);
+
+		// 根据配置决定使用单节点还是集群模式
+		if (config.redis.clusterMode) {
+			// AWS MemoryDB 集群模式
+			logger.info('使用 Redis 集群模式（MemoryDB/ElastiCache）');
+			this.client = new Cluster(
+				[
+					{
+						host: config.redis.host,
+						port: config.redis.port,
+					},
+				],
+				{
+					redisOptions: {
+						password: config.redis.password,
+						tls: config.redis.tls ? {} : undefined, // 启用 TLS
+						// BullMQ 要求必须为 null
+						maxRetriesPerRequest: null,
+						// 连接超时设置（10 秒）
+						connectTimeout: 10000,
+						// 命令超时设置（5 秒）
+						commandTimeout: 5000,
+					},
+					// 启用读写分离（可选）
+					scaleReads: 'slave',
+					// 集群连接超时
+					clusterRetryStrategy: (times) => {
+						if (times > 3) {
+							logger.error('Redis 集群连接失败，已达到最大重试次数');
+							return null; // 停止重试
+						}
+						const delay = Math.min(times * 1000, 3000);
+						logger.warn(`Redis 集群重试第 ${times} 次，延迟 ${delay}ms`);
+						return delay;
+					},
+				},
+			);
+		} else {
+			// 单节点模式
+			logger.info('使用 Redis 单节点模式');
+			this.client = new Redis({
+				host: config.redis.host,
+				port: config.redis.port,
+				password: config.redis.password,
+				db: config.redis.db,
+				tls: config.redis.tls ? {} : undefined, // 启用 TLS
+				// 连接超时设置（10 秒）
+				connectTimeout: 10000,
+				// 命令超时设置（5 秒）
+				commandTimeout: 5000,
+				retryStrategy: (times) => {
+					if (times > 3) {
+						logger.error('Redis 连接失败，已达到最大重试次数');
+						return null; // 停止重试
+					}
+					const delay = Math.min(times * 1000, 3000);
+					logger.warn(`Redis 重试第 ${times} 次，延迟 ${delay}ms`);
+					return delay;
+				},
+				maxRetriesPerRequest: null, // BullMQ 要求必须为 null
+			});
+		}
 
 		this.client.on('connect', () => {
 			this.isConnected = true;
@@ -44,7 +106,7 @@ class RedisClient {
 		});
 	}
 
-	getClient(): Redis {
+	getClient(): Redis | Cluster {
 		return this.client;
 	}
 
@@ -54,13 +116,44 @@ class RedisClient {
 	 */
 	async isReady(): Promise<boolean> {
 		try {
-			const result = await this.client.ping();
+			logger.info('正在测试 Redis 连接...');
+
+			// 创建一个带超时的 Promise
+			const pingPromise = this.client.ping();
+			const timeoutPromise = new Promise<never>((_, reject) => {
+				setTimeout(() => {
+					reject(new Error('Redis ping 超时（15秒）'));
+				}, 15000); // 15 秒超时
+			});
+
+			// 使用 Promise.race 实现超时
+			const result = await Promise.race([pingPromise, timeoutPromise]);
 			const isReady = result === 'PONG';
 			this.isConnected = isReady; // 更新内部状态
+
+			if (isReady) {
+				logger.info('✅ Redis PING 成功');
+			} else {
+				logger.error({ result }, '❌ Redis PING 返回异常结果');
+			}
+
 			return isReady;
 		} catch (error) {
 			this.isConnected = false;
-			logger.warn({ error }, '⚠️ Redis 连接检查失败');
+			logger.error(
+				{
+					error,
+					errorMessage: error instanceof Error ? error.message : String(error),
+					errorStack: error instanceof Error ? error.stack : undefined,
+					redisConfig: {
+						host: config.redis.host,
+						port: config.redis.port,
+						tls: config.redis.tls,
+						clusterMode: config.redis.clusterMode,
+					},
+				},
+				'❌ Redis 连接检查失败',
+			);
 			return false;
 		}
 	}

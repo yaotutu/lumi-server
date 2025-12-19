@@ -29,35 +29,47 @@ let cleanupTimer: NodeJS.Timeout | null = null;
  * 启动所有 Workers
  */
 async function startWorkers() {
-	logger.info({ msg: '🚀 启动 Workers...' });
+	logger.info('========================================');
+	logger.info('🚀 正在启动 Workers...');
+	logger.info('========================================');
 
 	try {
 		// 测试 Redis 连接
+		logger.info('步骤 1/4: 测试 Redis 连接...');
 		const redisConnected = await redisClient.isReady();
 		if (!redisConnected) {
-			throw new Error('Redis connection failed');
+			throw new Error(
+				'Redis connection failed - 请检查 Redis 配置（host, port, TLS, cluster mode）',
+			);
 		}
-		logger.info({ msg: '✅ Redis 连接成功' });
+		logger.info('✅ Redis 连接成功');
 
 		// 初始化 SSE Pub/Sub 服务（Worker 只需要发布功能）
+		logger.info('步骤 2/4: 初始化 SSE Pub/Sub 服务...');
 		await ssePubSubService.initialize();
-		logger.info({ msg: '✅ SSE Pub/Sub 服务已初始化' });
+		logger.info('✅ SSE Pub/Sub 服务已初始化');
 
 		// 启动 Image Worker
+		logger.info('步骤 3/4: 启动 Image Worker...');
 		const imageWorker = createImageWorker();
 		workers.push(imageWorker);
+		logger.info('✅ Image Worker 已启动');
 
 		// 启动 Model Worker
+		logger.info('步骤 4/4: 启动 Model Worker...');
 		const modelWorker = createModelWorker();
 		workers.push(modelWorker);
+		logger.info('✅ Model Worker 已启动');
 
 		// 启动孤儿文件清理定时任务
 		cleanupTimer = startOrphanedFileCleanup();
 
+		logger.info('========================================');
+		logger.info('🎉 所有 Workers 启动成功');
 		logger.info({
-			msg: '✅ 所有 Workers 启动成功',
 			workers: ['image-worker', 'model-worker', 'orphaned-file-cleanup'],
 		});
+		logger.info('========================================');
 	} catch (error) {
 		logger.error({
 			msg: '❌ Workers 启动失败',
