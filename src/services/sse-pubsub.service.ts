@@ -61,9 +61,10 @@ function createRedisConnection(name: string): Redis | Cluster {
 					maxRetriesPerRequest: null,
 					// 连接超时设置
 					connectTimeout: 20000,
-					commandTimeout: 20000,
+					commandTimeout: 30000, // 增加到30秒适应AWS环境
 					lazyConnect: true,
 				},
+				enableReadyCheck: true,
 			}
 		);
 	} else {
