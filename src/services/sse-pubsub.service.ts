@@ -283,7 +283,19 @@ class SSEPubSubService {
 		logger.info(`📢 准备订阅频道: ${SSE_CHANNEL}`);
 
 		try {
-			const subscribeResult = await this.subscriber.subscribe(SSE_CHANNEL);
+			// 增加订阅超时时间以适应 AWS 环境
+			const subscribePromise = this.subscriber.subscribe(SSE_CHANNEL);
+			const timeoutPromise = new Promise((_, reject) => {
+				setTimeout(() => {
+					reject(new Error('SSE 订阅超时 (30秒) - 可能的原因:\n' +
+						   '1. AWS MemoryDB 连接建立需要更长时间\n' +
+						   '2. 网络延迟较高\n' +
+						   '3. Redis 服务器负载高\n' +
+						   '4. 安全组或 VPC 配置问题'));
+				}, 30000); // 30秒超时
+			});
+
+			const subscribeResult = await Promise.race([subscribePromise, timeoutPromise]);
 			this.isSubscribed = true;
 
 			logger.info({
@@ -291,7 +303,7 @@ class SSEPubSubService {
 				subscribeResult,
 				handlersCount: this.eventHandlers.size,
 				timestamp: new Date().toISOString()
-			}, '✅ SSE 频道订阅成功');
+			}, '✅ SSE 频道订阅成功 (超时修复版)');
 
 		} catch (err) {
 			const error = err as Error;
@@ -300,11 +312,36 @@ class SSEPubSubService {
 				error: error.message,
 				errorName: error.name,
 				errorStack: error.stack?.substring(0, 500),
-				handlersCount: this.eventHandlers.size
-			}, '❌ SSE 频道订阅失败');
+				handlersCount: this.eventHandlers.size,
+				subscriberStatus: this.subscriber?.status,
+				timestamp: new Date().toISOString(),
+				fixAttempted: true
+			}, '❌ SSE 频道订阅失败 (使用超时修复)');
 
+			// 不抛出错误，而是记录并继续
+			logger.warn('⚠️ SSE 订阅失败但不阻止服务器启动，将在后台重试');
 			this.isSubscribed = false;
-			throw error;
+
+			// 5秒后自动重试
+			setTimeout(async () => {
+				try {
+					logger.info('🔄 后台重试 SSE 订阅...');
+					if (this.subscriber) {
+						await this.subscriber.subscribe(SSE_CHANNEL);
+						this.isSubscribed = true;
+						logger.info('✅ 后台 SSE 订阅重试成功');
+					} else {
+						logger.warn('❌ Subscriber 连接已丢失，无法重试');
+					}
+				} catch (retryError) {
+					const error = retryError as Error;
+					logger.error({
+						error: error.message,
+						errorName: error.name,
+						timestamp: new Date().toISOString()
+					}, '❌ 后台 SSE 订阅重试也失败');
+				}
+			}, 5000);
 		}
 	}
 
