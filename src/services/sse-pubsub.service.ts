@@ -30,65 +30,40 @@ export interface SSEEventMessage {
 const SSE_CHANNEL = 'sse:events';
 
 /**
- * 创建标准Redis连接（使用redis-client的配置）
+ * 创建Redis连接（使用经过验证的配置方案）
+ * 基于调试脚本中在AWS上验证通过的配置
  */
-function createRedisConnection(name: string): Redis | Cluster {
-	// 根据配置决定使用单节点还是集群模式
-	if (config.redis.clusterMode) {
-		// AWS MemoryDB 集群模式
-		logger.info({ name }, `创建 Redis 集群连接: ${name}`);
+function createRedisConnection(name: string): Redis {
+	// 统一使用单节点连接方式（在AWS和本地都验证通过）
+	logger.info({ name }, `创建Redis单节点连接: ${name}`);
 
-		// AWS MemoryDB 需要的 TLS 配置
-		const tlsOptions = config.redis.tls
-			? {
-					// AWS MemoryDB 使用自签名证书，需要禁用严格验证
-					rejectUnauthorized: false,
-				}
-			: undefined;
-
-		return new Cluster(
-			[
-				{
-					host: config.redis.host,
-					port: config.redis.port,
-				},
-			],
-			{
-				redisOptions: {
-					password: config.redis.password,
-					tls: tlsOptions,
-					// BullMQ 要求必须为 null
-					maxRetriesPerRequest: null,
-					// 连接超时设置
-					connectTimeout: 20000,
-					commandTimeout: 30000, // 增加到30秒适应AWS环境
-					lazyConnect: true,
-				},
-				enableReadyCheck: true,
+	const tlsOptions = config.redis.tls
+		? {
+				// AWS MemoryDB 需要禁用证书验证
+				rejectUnauthorized: false,
 			}
-		);
-	} else {
-		// 本地单节点模式
-		logger.info({ name }, `创建 Redis 单节点连接: ${name}`);
-		return new Redis({
-			host: config.redis.host,
-			port: config.redis.port,
-			password: config.redis.password || undefined,
-			db: config.redis.db,
-			connectTimeout: 20000,
-			commandTimeout: 20000,
-			maxRetriesPerRequest: null,
-			lazyConnect: true,
-		});
-	}
+		: undefined;
+
+	return new Redis({
+		host: config.redis.host,
+		port: config.redis.port,
+		password: config.redis.password || undefined,
+		db: config.redis.db,
+		tls: tlsOptions,
+		// 使用调试脚本中验证成功的超时配置
+		connectTimeout: 30000,      // 30秒连接超时
+		commandTimeout: 30000,     // 30秒命令超时
+		maxRetriesPerRequest: null, // BullMQ要求
+		lazyConnect: true,         // 延迟连接
+	});
 }
 
 /**
  * SSE Pub/Sub 服务类
  */
 class SSEPubSubService {
-	private publisher: Redis | Cluster | null = null;
-	private subscriber: Redis | Cluster | null = null;
+	private publisher: Redis | null = null;
+	private subscriber: Redis | null = null;
 	private eventHandlers: Map<string, (message: SSEEventMessage) => void> = new Map();
 	private isSubscribed = false; // 添加订阅状态标记
 
