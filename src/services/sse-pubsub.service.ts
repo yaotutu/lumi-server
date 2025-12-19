@@ -10,7 +10,7 @@
  * Worker (进程A) → Redis Pub/Sub → API Server (进程B) → SSE 连接 → 前端
  */
 
-import Redis from 'ioredis';
+import Redis, { Cluster } from 'ioredis';
 import { config } from '@/config/index.js';
 import { logger } from '@/utils/logger.js';
 import type { SSEEventType } from './sse-connection-manager.js';
@@ -30,11 +30,64 @@ export interface SSEEventMessage {
 const SSE_CHANNEL = 'sse:events';
 
 /**
+ * 创建标准Redis连接（使用redis-client的配置）
+ */
+function createRedisConnection(name: string): Redis | Cluster {
+	// 根据配置决定使用单节点还是集群模式
+	if (config.redis.clusterMode) {
+		// AWS MemoryDB 集群模式
+		logger.info({ name }, `创建 Redis 集群连接: ${name}`);
+
+		// AWS MemoryDB 需要的 TLS 配置
+		const tlsOptions = config.redis.tls
+			? {
+					// AWS MemoryDB 使用自签名证书，需要禁用严格验证
+					rejectUnauthorized: false,
+				}
+			: undefined;
+
+		return new Cluster(
+			[
+				{
+					host: config.redis.host,
+					port: config.redis.port,
+				},
+			],
+			{
+				redisOptions: {
+					password: config.redis.password,
+					tls: tlsOptions,
+					// BullMQ 要求必须为 null
+					maxRetriesPerRequest: null,
+					// 连接超时设置
+					connectTimeout: 20000,
+					commandTimeout: 20000,
+					lazyConnect: true,
+				},
+			}
+		);
+	} else {
+		// 本地单节点模式
+		logger.info({ name }, `创建 Redis 单节点连接: ${name}`);
+		return new Redis({
+			host: config.redis.host,
+			port: config.redis.port,
+			password: config.redis.password || undefined,
+			db: config.redis.db,
+			connectTimeout: 20000,
+			commandTimeout: 20000,
+			maxRetriesPerRequest: null,
+			lazyConnect: true,
+		});
+	}
+}
+
+/**
  * SSE Pub/Sub 服务类
  */
 class SSEPubSubService {
-	private publisher: Redis | null = null;
-	private subscriber: Redis | null = null;
+	private publisher: Redis | Cluster | null = null;
+	private subscriber: Redis | Cluster | null = null;
 	private eventHandlers: Map<string, (message: SSEEventMessage) => void> = new Map();
 	private isSubscribed = false; // 添加订阅状态标记
 
@@ -58,21 +111,9 @@ class SSEPubSubService {
 			return;
 		}
 
-		// 创建发布者连接 - 使用更保守的服务器配置
+		// 创建发布者连接 - 使用标准Redis配置
 		logger.info('📡 创建 Redis Publisher 连接...');
-		this.publisher = new Redis({
-			host: config.redis.host,
-			port: config.redis.port,
-			password: config.redis.password || undefined,
-			db: config.redis.db,
-			// 增加超时时间以适应服务器环境
-			connectTimeout: 20000,
-			commandTimeout: 20000,
-			// 使用更宽松的重试配置
-			maxRetriesPerRequest: null, // BullMQ 要求
-			lazyConnect: true,
-			// 移除可能有问题的配置以提高服务器兼容性
-		});
+		this.publisher = createRedisConnection('SSE-Publisher');
 
 		// 监听发布者连接事件
 		this.publisher.on('connect', () => {
@@ -101,16 +142,7 @@ class SSEPubSubService {
 
 		// 创建订阅者连接（订阅者需要独立的连接）
 		logger.info('📡 创建 Redis Subscriber 连接...');
-		this.subscriber = new Redis({
-			host: config.redis.host,
-			port: config.redis.port,
-			password: config.redis.password || undefined,
-			db: config.redis.db,
-			connectTimeout: 20000,
-			commandTimeout: 20000,
-			maxRetriesPerRequest: null,
-			lazyConnect: true,
-		});
+		this.subscriber = createRedisConnection('SSE-Subscriber');
 
 		// 监听订阅者连接事件
 		this.subscriber.on('connect', () => {
@@ -150,20 +182,8 @@ class SSEPubSubService {
 			return;
 		}
 
-		// 只创建发布者连接 - 使用更保守的服务器配置
-		this.publisher = new Redis({
-			host: config.redis.host,
-			port: config.redis.port,
-			password: config.redis.password || undefined,
-			db: config.redis.db,
-			// 增加超时时间以适应服务器环境
-			connectTimeout: 20000,
-			commandTimeout: 20000,
-			// 使用更宽松的重试配置
-			maxRetriesPerRequest: null, // BullMQ 要求
-			lazyConnect: true,
-			// 移除可能有问题的配置以提高服务器兼容性
-		});
+		// 只创建发布者连接 - 使用标准Redis配置
+		this.publisher = createRedisConnection('SSE-Worker-Publisher');
 
 		// 监听发布者错误
 		this.publisher.on('error', (error) => {
