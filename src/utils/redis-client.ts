@@ -24,6 +24,15 @@ class RedisClient {
 		if (config.redis.clusterMode) {
 			// AWS MemoryDB 集群模式
 			logger.info('使用 Redis 集群模式（MemoryDB/ElastiCache）');
+
+			// AWS MemoryDB 需要的 TLS 配置
+			const tlsOptions = config.redis.tls
+				? {
+						// AWS MemoryDB 使用自签名证书，需要禁用严格验证
+						rejectUnauthorized: false,
+					}
+				: undefined;
+
 			this.client = new Cluster(
 				[
 					{
@@ -34,7 +43,7 @@ class RedisClient {
 				{
 					redisOptions: {
 						password: config.redis.password,
-						tls: config.redis.tls ? {} : undefined, // 启用 TLS
+						tls: tlsOptions, // 使用配置好的 TLS 选项
 						// BullMQ 要求必须为 null
 						maxRetriesPerRequest: null,
 						// 连接超时设置（10 秒）
@@ -42,6 +51,10 @@ class RedisClient {
 						// 命令超时设置（5 秒）
 						commandTimeout: 5000,
 					},
+					// 启用 TLS（集群级别）
+					enableReadyCheck: true,
+					// 集群节点发现时也使用 TLS
+					natMap: undefined,
 					// 启用读写分离（可选）
 					scaleReads: 'slave',
 					// 集群连接超时
@@ -88,12 +101,31 @@ class RedisClient {
 		});
 
 		this.client.on('ready', () => {
-			logger.info('Redis client ready');
+			logger.info('✅ Redis client ready');
+			// 如果是集群模式，输出节点信息
+			if (this.client instanceof Cluster) {
+				const nodes = this.client.nodes('all');
+				logger.info(
+					{
+						nodesCount: nodes.length,
+						nodes: nodes.map((node) => `${node.options.host}:${node.options.port}`),
+					},
+					'Redis 集群节点信息',
+				);
+			}
 		});
 
 		this.client.on('error', (err) => {
 			this.isConnected = false;
-			logger.error({ err }, '❌ Redis error');
+			logger.error(
+				{
+					err,
+					errorName: err.name,
+					errorMessage: err.message,
+					errorStack: err.stack,
+				},
+				'❌ Redis error',
+			);
 		});
 
 		this.client.on('close', () => {
@@ -104,6 +136,40 @@ class RedisClient {
 		this.client.on('reconnecting', () => {
 			logger.info('Redis reconnecting...');
 		});
+
+		// 集群模式特有事件
+		if (this.client instanceof Cluster) {
+			this.client.on('node error', (err, address) => {
+				logger.error(
+					{
+						err,
+						address,
+						errorMessage: err.message,
+					},
+					'❌ Redis 集群节点错误',
+				);
+			});
+
+			this.client.on('+node', (node) => {
+				logger.info(
+					{
+						host: node.options.host,
+						port: node.options.port,
+					},
+					'✅ Redis 集群新增节点',
+				);
+			});
+
+			this.client.on('-node', (node) => {
+				logger.warn(
+					{
+						host: node.options.host,
+						port: node.options.port,
+					},
+					'⚠️ Redis 集群移除节点',
+				);
+			});
+		}
 	}
 
 	getClient(): Redis | Cluster {

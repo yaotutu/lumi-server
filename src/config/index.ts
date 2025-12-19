@@ -25,6 +25,8 @@ const envSchema = z.object({
 		.default('false')
 		.transform((val) => val === 'true'),
 	// 是否使用集群模式（AWS MemoryDB 集群配置端点需要启用）
+	// 注意：如果使用 AWS MemoryDB 集群配置端点（clustercfg.xxx），
+	// 可以设置为 false，将其作为单节点使用（会自动路由）
 	REDIS_CLUSTER_MODE: z
 		.string()
 		.default('false')
