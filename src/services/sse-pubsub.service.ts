@@ -54,8 +54,14 @@ class SSEPubSubService {
 			db: config.redis.db,
 			// 连接超时
 			connectTimeout: 10000,
+			// 命令超时
+			commandTimeout: 10000,
+			// TCP keep-alive
+			keepAlive: 30000,
 			// 最大重试次数
 			maxRetriesPerRequest: 3,
+			// 启用连接监控
+			enableReadyCheck: true,
 		});
 
 		// 创建订阅者连接（订阅者需要独立的连接）
@@ -65,7 +71,10 @@ class SSEPubSubService {
 			password: config.redis.password || undefined,
 			db: config.redis.db,
 			connectTimeout: 10000,
+			commandTimeout: 10000,
+			keepAlive: 30000,
 			maxRetriesPerRequest: 3,
+			enableReadyCheck: true,
 		});
 
 		// 监听发布者错误

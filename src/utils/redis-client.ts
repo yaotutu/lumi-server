@@ -80,8 +80,13 @@ class RedisClient {
 				tls: config.redis.tls ? {} : undefined, // 启用 TLS
 				// 连接超时设置（10 秒）
 				connectTimeout: 10000,
-				// 命令超时设置（5 秒）
-				commandTimeout: 5000,
+				// 命令超时设置（增加到 10 秒，避免 BullMQ 心跳超时）
+				commandTimeout: 10000,
+				// TCP keep-alive - 防止空闲连接被关闭
+				keepAlive: 30000, // 30 秒
+				// 连接池设置
+				maxRetriesPerRequest: null, // BullMQ 要求必须为 null
+				// 网络重连策略
 				retryStrategy: (times) => {
 					if (times > 3) {
 						logger.error('Redis 连接失败，已达到最大重试次数');
@@ -91,7 +96,10 @@ class RedisClient {
 					logger.warn(`Redis 重试第 ${times} 次，延迟 ${delay}ms`);
 					return delay;
 				},
-				maxRetriesPerRequest: null, // BullMQ 要求必须为 null
+				// 启用连接监控
+				enableReadyCheck: true,
+				// 空闲超时 - 0 表示不自动断开
+				lazyConnect: false,
 			});
 		}
 

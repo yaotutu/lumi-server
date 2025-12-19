@@ -70,8 +70,8 @@ export const fastifyPinoPrettyOptionsForConsole: PrettyOptions = {
 export const loggerTransport = {
 	targets: [
 		{
-			// 目标 1：控制台（简洁格式 + 自定义截断）
-			target: customTransportPath,
+			// 目标 1：控制台（简洁格式）
+			target: 'pino-pretty',
 			level: 'info',
 			options: pinoPrettyOptionsForConsole,
 		},
@@ -90,8 +90,8 @@ export const loggerTransport = {
 export const fastifyLoggerTransport = {
 	targets: [
 		{
-			// 目标 1：控制台（简洁格式 + 自定义截断，隐藏请求头）
-			target: customTransportPath,
+			// 目标 1：控制台（简洁格式，隐藏请求头）
+			target: 'pino-pretty',
 			level: 'info',
 			options: fastifyPinoPrettyOptionsForConsole,
 		},
