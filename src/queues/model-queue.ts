@@ -12,6 +12,9 @@ export interface ModelJobData {
 
 export const modelQueue = new Queue<ModelJobData>('model-generation', {
 	connection: redisClient.getClient(),
+	// Redis 集群模式下，使用 hash tag 确保所有相关的 key 在同一个槽
+	// 格式：{queueName} - 花括号内的内容用于计算哈希槽
+	prefix: '{model-generation}',
 	defaultJobOptions: {
 		attempts: config.queue.maxRetries,
 		backoff: {

@@ -272,6 +272,9 @@ async function processModelJob(job: Job<ModelJobData>) {
 export function createModelWorker() {
 	const worker = new Worker<ModelJobData>('model-generation', processModelJob, {
 		connection: redisClient.getClient(),
+		// Redis 集群模式下，使用 hash tag 确保所有相关的 key 在同一个槽
+		// 必须与 Queue 的 prefix 配置一致
+		prefix: '{model-generation}',
 		concurrency: config.queue.modelConcurrency, // 使用配置的并发数 (3D生成更耗时)
 		// 锁定时间：Job 在处理过程中持有锁的最长时间
 		// 如果超过此时间 Job 仍未完成，BullMQ 会将其标记为 stalled 并重新入队
