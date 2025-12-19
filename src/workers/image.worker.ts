@@ -269,6 +269,10 @@ export function createImageWorker() {
 	const worker = new Worker<ImageJobData>('image-generation', processImageJob, {
 		connection: redisClient.getClient(),
 		concurrency: config.queue.imageConcurrency, // 使用配置的并发数
+		// 锁定时间：Job 在处理过程中持有锁的最长时间
+		// 如果超过此时间 Job 仍未完成，BullMQ 会将其标记为 stalled 并重新入队
+		// 设置为与任务超时时间一致，防止长时间运行的任务被误判为 stalled
+		lockDuration: config.queue.jobTimeout,
 		limiter: {
 			max: 10, // 每 duration 时间内最多处理 10 个任务
 			duration: 60000, // 1 分钟

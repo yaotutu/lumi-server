@@ -15,13 +15,15 @@
  */
 
 import type { Worker } from 'bullmq';
+import { ssePubSubService } from '@/services/sse-pubsub.service';
 import { logger } from '@/utils/logger';
 import { redisClient } from '@/utils/redis-client';
-import { ssePubSubService } from '@/services/sse-pubsub.service';
 import { createImageWorker } from './image.worker.js';
 import { createModelWorker } from './model.worker.js';
+import { startOrphanedFileCleanup } from './orphaned-file-cleanup.worker.js';
 
 const workers: Worker[] = [];
+let cleanupTimer: NodeJS.Timeout | null = null;
 
 /**
  * 启动所有 Workers
@@ -31,7 +33,10 @@ async function startWorkers() {
 
 	try {
 		// 测试 Redis 连接
-		await redisClient.ping();
+		const redisConnected = await redisClient.isReady();
+		if (!redisConnected) {
+			throw new Error('Redis connection failed');
+		}
 		logger.info({ msg: '✅ Redis 连接成功' });
 
 		// 初始化 SSE Pub/Sub 服务（Worker 只需要发布功能）
@@ -46,9 +51,12 @@ async function startWorkers() {
 		const modelWorker = createModelWorker();
 		workers.push(modelWorker);
 
+		// 启动孤儿文件清理定时任务
+		cleanupTimer = startOrphanedFileCleanup();
+
 		logger.info({
 			msg: '✅ 所有 Workers 启动成功',
-			workers: ['image-worker', 'model-worker'],
+			workers: ['image-worker', 'model-worker', 'orphaned-file-cleanup'],
 		});
 	} catch (error) {
 		logger.error({
@@ -73,6 +81,12 @@ async function gracefulShutdown(signal: string) {
 	logger.info({ msg: `📥 收到 ${signal} 信号，开始优雅关闭...` });
 
 	try {
+		// 停止孤儿文件清理定时任务
+		if (cleanupTimer) {
+			clearInterval(cleanupTimer);
+			logger.info({ msg: '✅ 孤儿文件清理定时任务已停止' });
+		}
+
 		// 关闭所有 Workers
 		await Promise.all(workers.map((worker) => worker.close()));
 		logger.info({ msg: '✅ 所有 Workers 已关闭' });

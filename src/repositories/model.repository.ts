@@ -28,6 +28,14 @@ export class ModelRepository {
 	}
 
 	/**
+	 * 使用事务创建模型（用于保证多个操作的原子性）
+	 */
+	// biome-ignore lint/suspicious/noExplicitAny: Drizzle 事务类型过于复杂，使用 any 简化
+	async createWithTransaction(tx: any, data: NewModel): Promise<void> {
+		await tx.insert(models).values(data);
+	}
+
+	/**
 	 * 根据 ID 查询模型
 	 * 返回包含请求信息、源图片信息和生成任务信息的模型数据
 	 * URL 已转换为代理 URL，前端可直接使用

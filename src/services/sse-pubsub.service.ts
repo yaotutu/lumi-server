@@ -143,11 +143,14 @@ class SSEPubSubService {
 		try {
 			await this.publisher.publish(SSE_CHANNEL, JSON.stringify(message));
 
-			logger.debug({
-				taskId,
-				eventType,
-				dataKeys: Object.keys(data),
-			}, 'Published SSE event to Redis');
+			logger.debug(
+				{
+					taskId,
+					eventType,
+					dataKeys: Object.keys(data),
+				},
+				'Published SSE event to Redis',
+			);
 		} catch (error) {
 			logger.error({ error, taskId, eventType }, 'Failed to publish SSE event');
 			throw error;

@@ -273,6 +273,10 @@ export function createModelWorker() {
 	const worker = new Worker<ModelJobData>('model-generation', processModelJob, {
 		connection: redisClient.getClient(),
 		concurrency: config.queue.modelConcurrency, // 使用配置的并发数 (3D生成更耗时)
+		// 锁定时间：Job 在处理过程中持有锁的最长时间
+		// 如果超过此时间 Job 仍未完成，BullMQ 会将其标记为 stalled 并重新入队
+		// 3D 模型生成耗时较长，需要足够的 lockDuration 防止误判
+		lockDuration: config.queue.jobTimeout,
 		limiter: {
 			max: 5, // 每 duration 时间内最多处理 5 个任务
 			duration: 60000, // 1 分钟

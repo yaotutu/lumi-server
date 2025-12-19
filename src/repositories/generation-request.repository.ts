@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import type { MySqlTransaction } from 'drizzle-orm/mysql-core';
 import { db } from '@/db/drizzle';
 import {
 	type GenerationRequest,
@@ -314,6 +315,24 @@ export class GenerationRequestRepository {
 			.where(eq(generationRequests.id, id));
 
 		return this.findById(id);
+	}
+
+	/**
+	 * 使用事务更新请求（用于保证多个操作的原子性）
+	 */
+	async updateWithTransaction(
+		// biome-ignore lint/suspicious/noExplicitAny: Drizzle 事务类型过于复杂，使用 any 简化
+		tx: any,
+		id: string,
+		data: Partial<Omit<GenerationRequest, 'id' | 'createdAt'>>,
+	): Promise<void> {
+		await tx
+			.update(generationRequests)
+			.set({
+				...data,
+				updatedAt: new Date(),
+			})
+			.where(eq(generationRequests.id, id));
 	}
 
 	/**

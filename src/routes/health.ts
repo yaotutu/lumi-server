@@ -14,7 +14,7 @@ export async function healthRoutes(fastify: FastifyInstance) {
 
 	// 详细健康检查（包含依赖服务）
 	fastify.get('/health/detailed', async () => {
-		const [dbStatus, redisStatus] = await Promise.all([testConnection(), redisClient.ping()]);
+		const [dbStatus, redisStatus] = await Promise.all([testConnection(), redisClient.isReady()]);
 
 		const isHealthy = dbStatus && redisStatus;
 

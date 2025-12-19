@@ -16,6 +16,7 @@ import {
 	generationRequestRepository,
 	modelJobRepository,
 	modelRepository,
+	orphanedFileRepository,
 } from '@/repositories';
 import { NotFoundError, ValidationError } from '@/utils/errors';
 import { logger } from '@/utils/logger';
@@ -194,37 +195,67 @@ export async function selectImageAndGenerateModel(requestId: string, selectedIma
 		throw new ValidationError(`图片 ${selectedImageIndex} 尚未生成完成`);
 	}
 
-	// 更新 GenerationRequest 状态
-	await generationRequestRepository.update(requestId, {
-		selectedImageIndex,
-		phase: 'MODEL_GENERATION',
-		status: 'MODEL_PENDING',
-	});
+	// 检查幂等性：是否已经选择过图片并创建了模型
+	const existingModel = await modelRepository.findByRequestId(requestId);
+	if (existingModel) {
+		logger.warn(
+			{ requestId, existingModelId: existingModel.id },
+			'⚠️ 该请求已经选择过图片并创建了模型',
+		);
+		throw new ValidationError('该请求已经选择过图片并创建了模型');
+	}
 
-	// 创建 Model（默认为 PUBLIC，自动发布）
+	// 使用事务确保数据一致性
 	const modelId = createId();
-	const model = await modelRepository.create({
-		id: modelId,
-		requestId,
-		externalUserId: request.externalUserId,
-		name: `模型-${requestId.substring(0, 8)}`,
-		previewImageUrl: selectedImage.imageUrl,
-		visibility: 'PUBLIC',
-		publishedAt: new Date(), // 默认公开，设置发布时间
-	});
-
-	// 创建 ModelGenerationJob
 	const jobId = createId();
-	await modelJobRepository.create({
-		id: jobId,
-		modelId,
-		status: 'PENDING',
-		priority: 0,
-		retryCount: 0,
-		progress: 0,
-	});
 
-	// 加入模型生成队列
+	try {
+		await db.transaction(async (tx) => {
+			// 1. 更新 GenerationRequest 状态
+			await generationRequestRepository.updateWithTransaction(tx, requestId, {
+				selectedImageIndex,
+				phase: 'MODEL_GENERATION',
+				status: 'MODEL_PENDING',
+			});
+
+			// 2. 创建 Model（默认为 PUBLIC，自动发布）
+			await modelRepository.createWithTransaction(tx, {
+				id: modelId,
+				requestId,
+				externalUserId: request.externalUserId,
+				name: `模型-${requestId.substring(0, 8)}`,
+				previewImageUrl: selectedImage.imageUrl,
+				visibility: 'PUBLIC',
+				publishedAt: new Date(), // 默认公开，设置发布时间
+			});
+
+			// 3. 创建 ModelGenerationJob
+			await modelJobRepository.createWithTransaction(tx, {
+				id: jobId,
+				modelId,
+				status: 'PENDING',
+				priority: 0,
+				retryCount: 0,
+				progress: 0,
+			});
+
+			logger.info({
+				msg: '✅ 数据库事务成功提交',
+				requestId,
+				modelId,
+				jobId,
+			});
+		});
+	} catch (error) {
+		logger.error({
+			msg: '❌ 数据库事务失败，已回滚',
+			requestId,
+			error,
+		});
+		throw error;
+	}
+
+	// 事务成功后，执行副作用操作（加入队列）
 	await modelQueue.add(`model-${modelId}`, {
 		jobId,
 		modelId,
@@ -242,6 +273,8 @@ export async function selectImageAndGenerateModel(requestId: string, selectedIma
 		imageUrl: selectedImage.imageUrl,
 	});
 
+	// 返回创建的模型数据
+	const model = await modelRepository.findById(modelId);
 	return {
 		model,
 		selectedImageIndex,
@@ -278,6 +311,9 @@ export async function deleteRequest(requestId: string) {
 	// 验证生成请求存在
 	await getRequestById(requestId);
 
+	// 收集删除失败的文件 keys
+	const failedFiles: Array<{ s3Key: string; requestId: string }> = [];
+
 	// 1. 删除所有图片文件
 	const images = await generatedImageRepository.findByRequestId(requestId);
 	for (const image of images) {
@@ -288,14 +324,15 @@ export async function deleteRequest(requestId: string) {
 					await storageService.delete(key);
 					logger.info({ msg: '✅ 已删除图片文件', requestId, imageId: image.id, key });
 				} catch (error) {
-					// 删除失败记录日志但不阻断流程（文件可能已被删除）
+					// 删除失败：记录到孤儿文件表
 					logger.warn({
-						msg: '⚠️ 删除图片文件失败',
+						msg: '⚠️ 删除图片文件失败，已记录为孤儿文件',
 						requestId,
 						imageId: image.id,
 						key,
 						error,
 					});
+					failedFiles.push({ s3Key: key, requestId });
 				}
 			}
 		}
@@ -318,14 +355,15 @@ export async function deleteRequest(requestId: string) {
 					await storageService.delete(key);
 					logger.info({ msg: '✅ 已删除模型文件', requestId, modelId: associatedModel.id, key });
 				} catch (error) {
-					// 删除失败记录日志但不阻断流程
+					// 删除失败：记录到孤儿文件表
 					logger.warn({
-						msg: '⚠️ 删除模型文件失败',
+						msg: '⚠️ 删除模型文件失败，已记录为孤儿文件',
 						requestId,
 						modelId: associatedModel.id,
 						key,
 						error,
 					});
+					failedFiles.push({ s3Key: key, requestId });
 				}
 			}
 		}
@@ -342,11 +380,22 @@ export async function deleteRequest(requestId: string) {
 	// 3. 调用 Repository 层删除数据库记录（级联删除 images）
 	await generationRequestRepository.delete(requestId);
 
+	// 4. 批量记录删除失败的文件到孤儿文件表
+	if (failedFiles.length > 0) {
+		await orphanedFileRepository.batchCreate(failedFiles);
+		logger.warn({
+			msg: '⚠️ 部分文件删除失败，已记录到孤儿文件表',
+			requestId,
+			failedCount: failedFiles.length,
+		});
+	}
+
 	logger.info({
 		msg: '✅ 删除生成请求完成',
 		requestId,
 		deletedImages: images.length,
 		deletedModel: !!associatedModel,
+		failedFiles: failedFiles.length,
 	});
 }
 

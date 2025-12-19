@@ -1,10 +1,10 @@
 import { buildApp } from './app.js';
 import { config } from './config/index.js';
 import { closeDatabase, testConnection } from './db/drizzle.js';
+import { sseConnectionManager } from './services/sse-connection-manager.js';
+import { ssePubSubService } from './services/sse-pubsub.service.js';
 import { logger } from './utils/logger.js';
 import { redisClient } from './utils/redis-client.js';
-import { ssePubSubService } from './services/sse-pubsub.service.js';
-import { sseConnectionManager } from './services/sse-connection-manager.js';
 
 /**
  * API Server 启动入口
@@ -24,7 +24,7 @@ async function start() {
 		}
 
 		// 测试 Redis 连接
-		const redisConnected = await redisClient.ping();
+		const redisConnected = await redisClient.isReady();
 		if (!redisConnected) {
 			throw new Error('Redis connection failed');
 		}
@@ -36,17 +36,16 @@ async function start() {
 
 		// 订阅 Redis 事件并转发给 SSE 连接
 		await ssePubSubService.subscribe((message) => {
-			logger.debug({
-				taskId: message.taskId,
-				eventType: message.eventType,
-			}, '收到 Redis SSE 事件，转发给本地连接');
+			logger.debug(
+				{
+					taskId: message.taskId,
+					eventType: message.eventType,
+				},
+				'收到 Redis SSE 事件，转发给本地连接',
+			);
 
 			// 推送给本地 SSE 连接
-			sseConnectionManager.sendToLocalConnections(
-				message.taskId,
-				message.eventType,
-				message.data,
-			);
+			sseConnectionManager.sendToLocalConnections(message.taskId, message.eventType, message.data);
 		});
 
 		logger.info('✅ SSE Pub/Sub service initialized and subscribed');

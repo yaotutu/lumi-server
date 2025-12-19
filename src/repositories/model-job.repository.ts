@@ -24,6 +24,14 @@ export class ModelJobRepository {
 	}
 
 	/**
+	 * 使用事务创建任务（用于保证多个操作的原子性）
+	 */
+	// biome-ignore lint/suspicious/noExplicitAny: Drizzle 事务类型过于复杂，使用 any 简化
+	async createWithTransaction(tx: any, data: NewModelGenerationJob): Promise<void> {
+		await tx.insert(modelGenerationJobs).values(data);
+	}
+
+	/**
 	 * 根据 ID 查询任务
 	 */
 	async findById(id: string): Promise<ModelGenerationJob | undefined> {

@@ -75,8 +75,8 @@ export async function healthRoutes(fastify: FastifyInstance) {
 
 		try {
 			// 检查 Redis 连接
-			await redisClient.ping();
-			checks.redis = true;
+			const redisConnected = await redisClient.isReady();
+			checks.redis = redisConnected;
 		} catch (error) {
 			logger.error({ msg: 'Redis健康检查失败', error });
 		}

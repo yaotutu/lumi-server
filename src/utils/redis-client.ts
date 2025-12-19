@@ -48,7 +48,28 @@ class RedisClient {
 		return this.client;
 	}
 
-	isReady(): boolean {
+	/**
+	 * 检查 Redis 连接是否可用（通过 PING 命令实时验证）
+	 * @returns Promise<boolean> - 连接是否可用
+	 */
+	async isReady(): Promise<boolean> {
+		try {
+			const result = await this.client.ping();
+			const isReady = result === 'PONG';
+			this.isConnected = isReady; // 更新内部状态
+			return isReady;
+		} catch (error) {
+			this.isConnected = false;
+			logger.warn({ error }, '⚠️ Redis 连接检查失败');
+			return false;
+		}
+	}
+
+	/**
+	 * 同步检查连接状态（仅检查内部标志，不执行网络请求）
+	 * @returns boolean - 连接状态标志
+	 */
+	isConnectedSync(): boolean {
 		return this.isConnected;
 	}
 
@@ -57,16 +78,16 @@ class RedisClient {
 		logger.info('Redis client disconnected');
 	}
 
+	/**
+	 * @deprecated 使用 isReady() 替代，该方法会实时验证连接
+	 */
 	async ping(): Promise<boolean> {
-		try {
-			const result = await this.client.ping();
-			return result === 'PONG';
-		} catch (error) {
-			logger.error({ error }, 'Redis ping failed');
-			return false;
-		}
+		return this.isReady();
 	}
 }
 
 // 单例模式
 export const redisClient = new RedisClient();
+
+// 导出连接供 BullMQ 使用
+export const redisConnection = redisClient.getClient();

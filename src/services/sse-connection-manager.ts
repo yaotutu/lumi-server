@@ -52,6 +52,168 @@ class SSEConnectionManager {
 	// 实例 ID（用于调试，验证是否是同一个实例）
 	private readonly instanceId = Math.random().toString(36).substring(7);
 
+	// 定时清理任务的 Timer ID
+	private cleanupTimer: NodeJS.Timeout | null = null;
+
+	// 连接超时时间（1 小时）
+	private readonly CONNECTION_TIMEOUT_MS = 60 * 60 * 1000;
+
+	// 清理检查间隔（1 分钟）
+	private readonly CLEANUP_INTERVAL_MS = 60 * 1000;
+
+	// 优雅关闭等待时间（5 秒）
+	// 发送关闭通知后，等待前端主动关闭的时间
+	private readonly GRACEFUL_CLOSE_WAIT_MS = 5000;
+
+	constructor() {
+		// 启动定时清理任务
+		this.startCleanupTimer();
+		logger.info({ msg: 'SSE 连接管理器已初始化，定时清理任务已启动' });
+	}
+
+	/**
+	 * 启动定时清理任务
+	 * 每分钟检查一次，清理超过 1 小时的连接
+	 */
+	private startCleanupTimer(): void {
+		this.cleanupTimer = setInterval(() => {
+			this.cleanupStaleConnections();
+		}, this.CLEANUP_INTERVAL_MS);
+
+		logger.info({
+			msg: '定时清理任务已启动',
+			intervalMs: this.CLEANUP_INTERVAL_MS,
+			timeoutMs: this.CONNECTION_TIMEOUT_MS,
+		});
+	}
+
+	/**
+	 * 清理过期的连接
+	 * 采用"优雅关闭 + 强制关闭"策略：
+	 * 1. 先发送 connection:timeout 事件通知前端
+	 * 2. 等待 5 秒让前端主动关闭
+	 * 3. 如果前端没有响应（连接仍存在），强制关闭
+	 */
+	private cleanupStaleConnections(): void {
+		const now = Date.now();
+		let notifiedCount = 0;
+
+		for (const [taskId, taskConnections] of this.connections) {
+			for (const connection of taskConnections) {
+				const age = now - connection.connectedAt.getTime();
+
+				// 如果连接超过 1 小时，开始清理流程
+				if (age > this.CONNECTION_TIMEOUT_MS) {
+					logger.warn({
+						msg: '检测到过期的 SSE 连接，开始优雅关闭流程',
+						taskId,
+						ageMs: age,
+						ageHours: (age / (60 * 60 * 1000)).toFixed(2),
+					});
+
+					// 步骤 1: 发送关闭通知给前端
+					try {
+						connection.reply.raw.write('event: connection:timeout\n');
+						connection.reply.raw.write(
+							`data: ${JSON.stringify({
+								message: '连接已超时，请主动关闭',
+								ageMs: age,
+								gracefulCloseWaitMs: this.GRACEFUL_CLOSE_WAIT_MS,
+							})}\n\n`,
+						);
+
+						logger.info({
+							msg: '已发送 connection:timeout 事件通知前端',
+							taskId,
+						});
+
+						notifiedCount++;
+					} catch (error) {
+						// 如果发送失败，说明连接已经断开，直接移除
+						logger.warn({
+							msg: '发送关闭通知失败，连接可能已断开',
+							taskId,
+							error,
+						});
+						this.removeConnection(connection);
+						continue;
+					}
+
+					// 步骤 2: 等待前端主动关闭（5 秒）
+					setTimeout(() => {
+						// 检查连接是否还存在于 Map 中
+						const taskConnections = this.connections.get(taskId);
+						if (!taskConnections) {
+							// 任务的所有连接都已关闭
+							logger.info({
+								msg: '✅ 前端已主动关闭连接（任务连接集合已清空）',
+								taskId,
+							});
+							return;
+						}
+
+						// 检查当前连接是否还在
+						if (!taskConnections.has(connection)) {
+							// 前端已经主动关闭了这个连接
+							logger.info({
+								msg: '✅ 前端已主动关闭连接',
+								taskId,
+							});
+							return;
+						}
+
+						// 步骤 3: 连接仍然存在，说明前端没有响应，强制关闭
+						logger.warn({
+							msg: '⚠️ 前端未响应关闭通知，执行强制关闭',
+							taskId,
+							waitedMs: this.GRACEFUL_CLOSE_WAIT_MS,
+						});
+
+						try {
+							connection.reply.raw.end();
+						} catch (error) {
+							// 忽略关闭错误
+							logger.debug({
+								msg: '强制关闭连接时出错（可能已关闭）',
+								taskId,
+								error,
+							});
+						}
+
+						// 从内存中移除
+						this.removeConnection(connection);
+
+						logger.info({
+							msg: '✅ 强制关闭完成',
+							taskId,
+						});
+					}, this.GRACEFUL_CLOSE_WAIT_MS);
+				}
+			}
+		}
+
+		// 记录清理统计
+		if (notifiedCount > 0) {
+			logger.info({
+				msg: '✅ 过期连接清理流程已启动',
+				notifiedCount,
+				gracefulCloseWaitMs: this.GRACEFUL_CLOSE_WAIT_MS,
+				currentConnections: this.getStats().totalConnections,
+			});
+		}
+	}
+
+	/**
+	 * 停止定时清理任务（用于测试或关闭服务器）
+	 */
+	stopCleanupTimer(): void {
+		if (this.cleanupTimer) {
+			clearInterval(this.cleanupTimer);
+			this.cleanupTimer = null;
+			logger.info({ msg: '定时清理任务已停止' });
+		}
+	}
+
 	/**
 	 * 添加 SSE 连接
 	 * @param taskId 任务 ID
@@ -146,11 +308,14 @@ class SSEConnectionManager {
 			// 通过 Redis Pub/Sub 发布事件
 			await ssePubSubService.publish(taskId, eventType, data as Record<string, any>);
 		} catch (error) {
-			logger.error({
-				error,
-				taskId,
-				eventType,
-			}, 'Failed to publish SSE event via Redis');
+			logger.error(
+				{
+					error,
+					taskId,
+					eventType,
+				},
+				'Failed to publish SSE event via Redis',
+			);
 
 			// 如果 Redis 发布失败，尝试本地推送（作为降级方案）
 			this.sendToLocalConnections(taskId, eventType, data);
