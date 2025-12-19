@@ -46,8 +46,8 @@ async function startWorkers() {
 
 		// 初始化 SSE Pub/Sub 服务（Worker 只需要发布功能）
 		logger.info('步骤 2/4: 初始化 SSE Pub/Sub 服务...');
-		await ssePubSubService.initialize();
-		logger.info('✅ SSE Pub/Sub 服务已初始化');
+		await ssePubSubService.initializePublisherOnly();
+		logger.info('✅ SSE Pub/Sub 发布服务已初始化');
 
 		// 启动 Image Worker
 		logger.info('步骤 3/4: 启动 Image Worker...');

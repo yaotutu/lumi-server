@@ -38,7 +38,7 @@ class SSEPubSubService {
 	private eventHandlers: Map<string, (message: SSEEventMessage) => void> = new Map();
 
 	/**
-	 * 初始化 Redis 连接
+	 * 初始化 Redis 连接（完整版本 - 用于 API Server）
 	 */
 	async initialize(): Promise<void> {
 		if (this.publisher && this.subscriber) {
@@ -83,7 +83,40 @@ class SSEPubSubService {
 			logger.error({ error }, 'Redis subscriber error');
 		});
 
-		logger.info('SSE Pub/Sub service initialized');
+		logger.info('SSE Pub/Sub service initialized (full mode - publisher + subscriber)');
+	}
+
+	/**
+	 * 仅初始化发布者连接（用于 Worker 进程）
+	 * Worker 进程只需要发送消息，不需要订阅
+	 */
+	async initializePublisherOnly(): Promise<void> {
+		if (this.publisher) {
+			logger.warn('SSE publisher already initialized');
+			return;
+		}
+
+		// 只创建发布者连接 - 使用更保守的服务器配置
+		this.publisher = new Redis({
+			host: config.redis.host,
+			port: config.redis.port,
+			password: config.redis.password || undefined,
+			db: config.redis.db,
+			// 增加超时时间以适应服务器环境
+			connectTimeout: 20000,
+			commandTimeout: 20000,
+			// 使用更宽松的重试配置
+			maxRetriesPerRequest: null, // BullMQ 要求
+			lazyConnect: true,
+			// 移除可能有问题的配置以提高服务器兼容性
+		});
+
+		// 监听发布者错误
+		this.publisher.on('error', (error) => {
+			logger.error({ error }, 'Redis publisher error');
+		});
+
+		logger.info('SSE Pub/Sub service initialized (publisher only - Worker mode)');
 	}
 
 	/**
