@@ -6,7 +6,6 @@
  * - 调用图片生成 Provider 生成图片
  * - 下载临时图片并上传到 S3（永久存储）
  * - 更新 GeneratedImage 和 ImageGenerationJob 状态
- * - 通过 SSE 实时推送状态更新
  * - 处理失败和重试逻辑
  */
 
@@ -19,11 +18,9 @@ import {
 	generationRequestRepository,
 	imageJobRepository,
 } from '@/repositories';
-import { sseConnectionManager } from '@/services/sse-connection-manager';
 import { storageService } from '@/services/storage.service';
 import { logger } from '@/utils/logger';
 import { redisClient } from '@/utils/redis-client';
-import { transformToProxyUrl } from '@/utils/url-transformer';
 
 /**
  * 处理图片生成任务
@@ -84,20 +81,6 @@ async function processImageJob(job: Job<ImageJobData>) {
 			});
 		}
 
-		// ✅ SSE 推送: image:generating
-		await sseConnectionManager.broadcast(requestId, 'image:generating', {
-			imageId,
-			index: imageIndex,
-			prompt: optimizedPrompt, // 使用优化后的提示词
-		});
-
-		logger.info({
-			msg: '📡 SSE 推送: image:generating',
-			requestId,
-			imageId,
-			index: imageIndex,
-		});
-
 		// 调用图片生成 Provider
 		const imageProvider = createImageProvider();
 		logger.info({
@@ -153,22 +136,6 @@ async function processImageJob(job: Job<ImageJobData>) {
 			completedAt,
 		});
 
-		// ✅ SSE 推送: image:completed（推送代理 URL，前端可直接使用）
-		await sseConnectionManager.broadcast(requestId, 'image:completed', {
-			imageId,
-			index: imageIndex,
-			imageUrl: transformToProxyUrl(s3ImageUrl, 'image'), // ✅ 转换为代理 URL
-			completedAt,
-		});
-
-		logger.info({
-			msg: '📡 SSE 推送: image:completed',
-			requestId,
-			imageId,
-			index: imageIndex,
-			imageUrl: s3ImageUrl,
-		});
-
 		// 更新 Job 状态为 COMPLETED
 		await imageJobRepository.updateStatus(jobId, 'COMPLETED', {
 			completedAt: new Date(),
@@ -187,21 +154,15 @@ async function processImageJob(job: Job<ImageJobData>) {
 			allCompleted,
 		});
 
-		// ✅ SSE 推送: task:updated (所有图片完成)
+		// 如果所有图片都生成完成，更新任务状态
 		if (allCompleted && totalImages > 0) {
 			await generationRequestRepository.update(requestId, {
 				status: 'IMAGE_COMPLETED',
 				phase: 'AWAITING_SELECTION',
 			});
 
-			await sseConnectionManager.broadcast(requestId, 'task:updated', {
-				requestId,
-				status: 'IMAGE_COMPLETED',
-				phase: 'AWAITING_SELECTION',
-			});
-
 			logger.info({
-				msg: '📡 SSE 推送: task:updated (所有图片生成完成)',
+				msg: '✅ 所有图片生成完成',
 				requestId,
 				totalImages,
 			});
@@ -228,15 +189,8 @@ async function processImageJob(job: Job<ImageJobData>) {
 			errorMessage,
 		});
 
-		// ✅ SSE 推送: image:failed
-		await sseConnectionManager.broadcast(requestId, 'image:failed', {
-			imageId,
-			index: imageIndex,
-			errorMessage,
-		});
-
 		logger.info({
-			msg: '📡 SSE 推送: image:failed',
+			msg: '❌ 图片生成失败',
 			requestId,
 			imageId,
 			index: imageIndex,

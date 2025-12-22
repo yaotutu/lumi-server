@@ -96,7 +96,7 @@ export const CreateTaskInput = Type.Object(
  */
 export const SelectImageInput = Type.Object(
 	{
-		imageIndex: Type.Integer({
+		selectedImageIndex: Type.Integer({
 			minimum: 0,
 			maximum: 3,
 			description: '选择的图片索引 (0-3)',

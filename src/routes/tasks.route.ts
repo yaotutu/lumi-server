@@ -11,19 +11,17 @@ import {
 	deleteTaskSchema,
 	getPrintStatusSchema,
 	getTaskSchema,
+	getTaskStatusSchema,
 	listTasksSchema,
 	selectImageSchema,
 	submitPrintSchema,
-	taskEventsSchema,
 } from '@/schemas/routes/tasks.schema';
 import * as GenerationRequestService from '@/services/generation-request.service';
 import * as PromptOptimizerService from '@/services/prompt-optimizer.service';
-import { sseConnectionManager } from '@/services/sse-connection-manager';
 import { ValidationError } from '@/utils/errors';
 import { logger } from '@/utils/logger';
 import { getUserIdFromRequest } from '@/utils/request-auth';
 import { fail, success } from '@/utils/response';
-import { adaptGenerationRequest } from '@/utils/task-adapter';
 
 /**
  * 注册生成请求路由
@@ -194,10 +192,14 @@ export async function taskRoutes(fastify: FastifyInstance) {
 				modelId: result.model?.id,
 			});
 
+
+			// 重新查询完整的 task 对象（包含更新后的状态）
+			const updatedTask = await GenerationRequestService.getRequestById(id);
+
 			return reply.send(
 				success({
+					task: updatedTask,
 					model: result.model,
-					selectedImageIndex: result.selectedImageIndex,
 				}),
 			);
 		} catch (error) {
@@ -326,124 +328,49 @@ export async function taskRoutes(fastify: FastifyInstance) {
 	);
 
 	/**
-	 * GET /api/tasks/:id/events
-	 * SSE (Server-Sent Events) 实时任务状态推送
+	 * GET /api/tasks/:id/status
+	 * 轮询获取任务状态（替代 SSE）
 	 *
-	 * 事件类型：
-	 * - image:generating - 图片开始生成
-	 * - image:completed - 图片生成完成（包含 imageUrl）
-	 * - image:failed - 图片生成失败
-	 * - model:generating - 模型开始生成
-	 * - model:progress - 模型生成进度更新（包含 progress 0-100）
-	 * - model:completed - 模型生成完成（包含 modelUrl）
-	 * - model:failed - 模型生成失败
-	 * - task:init - 任务初始状态（连接建立后立即发送）
+	 * 支持条件查询：
+	 * - 传递 since 参数（上次查询的 updatedAt）
+	 * - 如果数据未更新，返回 304 Not Modified，减少网络流量
 	 */
-	fastify.get<{ Params: { id: string } }>(
-		'/api/tasks/:id/events',
-		{ schema: taskEventsSchema },
-		async (request, reply) => {
-			const { id: taskId } = request.params;
+	fastify.get<{
+		Params: { id: string };
+		Querystring: { since?: string };
+	}>('/api/tasks/:id/status', { schema: getTaskStatusSchema }, async (request, reply) => {
+		const { id } = request.params;
+		const { since } = request.query;
 
-			// 从认证中间件获取用户信息
-			const userId = getUserIdFromRequest(request);
+		try {
+			// 查询任务详情（包含 images 和 model）
+			const task = await GenerationRequestService.getRequestById(id);
 
-			logger.info({ msg: '建立 SSE 连接', taskId, userId });
+			// 优化：如果数据未更新，返回 304 Not Modified
+			if (since) {
+				const sinceDate = new Date(since);
+				const taskUpdatedAt = new Date(task.updatedAt);
 
-			// 获取请求的 Origin
-			const origin = request.headers.origin as string;
-
-			// 检查 Origin 是否在白名单中
-			const allowedOrigin = config.cors.origins.includes(origin) ? origin : config.cors.origins[0];
-
-			// 设置 SSE 响应头 (包含 CORS 头)
-			reply.raw.writeHead(200, {
-				'Content-Type': 'text/event-stream',
-				'Cache-Control': 'no-cache, no-transform',
-				Connection: 'keep-alive',
-				'X-Accel-Buffering': 'no', // 禁用 Nginx 缓冲
-				// ✅ CORS 头 (SSE 必须手动添加)
-				'Access-Control-Allow-Origin': allowedOrigin,
-				'Access-Control-Allow-Credentials': 'true',
-			});
-
-			// 刷新响应头，确保客户端立即收到
-			reply.raw.flushHeaders();
-
-			// 存储心跳定时器
-			let heartbeatInterval: NodeJS.Timeout | undefined;
-			let connection: ReturnType<typeof sseConnectionManager.addConnection> | undefined;
-
-			try {
-				// 添加到连接管理器
-				connection = sseConnectionManager.addConnection(taskId, reply);
-
-				// 1. 发送初始状态
-				logger.info({ msg: '发送任务初始状态', taskId });
-
-				try {
-					// 查询任务详情
-					const generationRequest = await GenerationRequestService.getRequestById(taskId);
-
-					logger.info({ msg: '📊 查询到任务数据', taskId, data: generationRequest });
-
-					// 适配为前端格式
-					const taskData = adaptGenerationRequest(generationRequest);
-
-					logger.info({ msg: '✅ 适配后的任务数据', taskId, data: taskData });
-
-					// 发送初始状态事件
-					reply.raw.write(`event: task:init\ndata: ${JSON.stringify(taskData)}\n\n`);
-
-					logger.info({ msg: '📡 已发送 task:init 事件', taskId });
-				} catch (error) {
-					logger.error({ msg: '查询任务详情失败', error, taskId });
-					// 发送错误事件
-					reply.raw.write(
-						`event: error\ndata: ${JSON.stringify({ message: '任务不存在或已删除' })}\n\n`,
-					);
-					// 关闭连接
-					reply.raw.end();
-					sseConnectionManager.removeConnection(connection);
-					return;
-				}
-
-				// 2. 设置心跳定时器（每 30 秒）
-				heartbeatInterval = setInterval(() => {
-					try {
-						if (connection) {
-							sseConnectionManager.sendHeartbeat(connection);
-						}
-					} catch (error) {
-						logger.error({ msg: '心跳发送失败，清理连接', error, taskId });
-						clearInterval(heartbeatInterval);
-					}
-				}, 30000);
-
-				// 3. 监听客户端断开
-				request.raw.on('close', () => {
-					logger.info({ msg: '客户端主动断开 SSE 连接', taskId });
-					if (heartbeatInterval) {
-						clearInterval(heartbeatInterval);
-					}
-					if (connection) {
-						sseConnectionManager.removeConnection(connection);
-					}
-				});
-
-				// 保持连接打开，不调用 reply.send()
-			} catch (error) {
-				logger.error({ msg: 'SSE 流初始化异常', error, taskId });
-				if (heartbeatInterval) {
-					clearInterval(heartbeatInterval);
-				}
-				if (connection) {
-					sseConnectionManager.removeConnection(connection);
-				}
-				if (!reply.sent) {
-					reply.raw.end();
+				if (taskUpdatedAt <= sinceDate) {
+					// 数据未更新，返回 304
+					return reply.code(304).send();
 				}
 			}
-		},
-	);
+
+			// 设置缓存头（禁用缓存，确保每次都查询最新数据）
+			reply.header('Cache-Control', 'no-cache, must-revalidate');
+
+			// 返回完整任务数据（与 GET /api/tasks/:id 相同的格式）
+			return reply.send(success(task));
+		} catch (error) {
+			logger.error({ msg: '查询任务状态失败（轮询）', error, taskId: id });
+
+			if (error instanceof Error && error.message.includes('不存在')) {
+				return reply.code(404).send(fail('任务不存在'));
+			}
+
+			return reply.code(500).send(fail('查询任务状态失败'));
+		}
+	});
+
 }

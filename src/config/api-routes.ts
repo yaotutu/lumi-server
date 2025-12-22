@@ -127,14 +127,28 @@ function matchPathTemplate(pathname: string, template: string): boolean {
 export function isProtectedRoute(pathname: string, method: string): boolean {
 	// 1. 优先检查公开 API（白名单优先）
 	for (const pattern of API_ROUTES.public) {
-		if (matchesPattern(pathname, pattern)) {
-			// 进一步检查是否有特定方法的保护规则
-			for (const rule of API_ROUTES.protectedByMethod) {
-				if (matchPathTemplate(pathname, rule.path) && rule.methods.includes(method)) {
-					return true; // 虽然路径是公开的，但特定方法需要认证
+		// 支持路径模板（例如 /api/tasks/:id/status）
+		if (pattern.includes(':')) {
+			if (matchPathTemplate(pathname, pattern)) {
+				// 进一步检查是否有特定方法的保护规则
+				for (const rule of API_ROUTES.protectedByMethod) {
+					if (matchPathTemplate(pathname, rule.path) && rule.methods.includes(method)) {
+						return true; // 虽然路径是公开的，但特定方法需要认证
+					}
 				}
+				return false; // 公开 API
 			}
-			return false; // 公开 API
+		} else {
+			// 普通路径（使用 startsWith）
+			if (matchesPattern(pathname, pattern)) {
+				// 进一步检查是否有特定方法的保护规则
+				for (const rule of API_ROUTES.protectedByMethod) {
+					if (matchPathTemplate(pathname, rule.path) && rule.methods.includes(method)) {
+						return true; // 虽然路径是公开的，但特定方法需要认证
+					}
+				}
+				return false; // 公开 API
+			}
 		}
 	}
 

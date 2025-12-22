@@ -145,6 +145,39 @@ export const getPrintStatusSchema = {
 } as const;
 
 /**
+ * GET /api/tasks/:id/status - 获取任务状态（轮询）
+ */
+export const getTaskStatusSchema = {
+	tags: ['任务'],
+	summary: '获取任务状态（轮询）',
+	description: '轮询获取任务的最新状态，替代 SSE。支持条件查询（since 参数），仅返回有变更的数据',
+	params: IdParam,
+	querystring: Type.Object({
+		since: Type.Optional(
+			Type.String({
+				format: 'date-time',
+				description: '上次查询的 updatedAt 时间，如果数据未更新则返回 304',
+			}),
+		),
+	}),
+	response: {
+		200: JSendSuccess(
+			Type.Intersect([
+				TaskWithImages,
+				Type.Object({
+					model: Type.Union([ModelEntity, Type.Null()], {
+						description: '关联的 3D 模型（如有）',
+					}),
+				}),
+			]),
+		),
+		304: Type.Object({}, { description: 'Not Modified - 数据未更新' }),
+		404: JSendFail,
+		500: JSendError,
+	},
+} as const;
+
+/**
  * GET /api/tasks/:id/events - SSE 事件流
  */
 export const taskEventsSchema = {
