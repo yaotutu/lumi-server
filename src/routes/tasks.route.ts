@@ -120,8 +120,12 @@ export async function taskRoutes(fastify: FastifyInstance) {
 				finalPrompt = await PromptOptimizerService.optimizePromptFor3DPrint(prompt);
 			}
 
-			// ✅ 创建生成请求（自动创建 4 个 Image 和 4 个 ImageJob）
-			const generationRequest = await GenerationRequestService.createRequest(userId, finalPrompt);
+			// ✅ 创建生成请求（保存原始提示词 + 优化后提示词）
+			const generationRequest = await GenerationRequestService.createRequest(
+				userId,
+				finalPrompt, // ✅ 优化后的提示词（用于实际生成图片）
+				prompt.trim(), // ✅ 用户原始输入（用于前端显示）
+			);
 
 			// ✅ 将 4 个已创建的 ImageJob 加入 BullMQ 队列
 			const imageJobs = await Promise.all(
@@ -191,7 +195,6 @@ export async function taskRoutes(fastify: FastifyInstance) {
 				selectedImageIndex,
 				modelId: result.model?.id,
 			});
-
 
 			// 重新查询完整的 task 对象（包含更新后的状态）
 			const updatedTask = await GenerationRequestService.getRequestById(id);
@@ -372,5 +375,4 @@ export async function taskRoutes(fastify: FastifyInstance) {
 			return reply.code(500).send(fail('查询任务状态失败'));
 		}
 	});
-
 }

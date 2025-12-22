@@ -57,16 +57,17 @@ export async function getRequestById(requestId: string) {
  * 创建新的生成请求
  *
  * 使用数据库事务确保原子性：
- * - 1 个 GenerationRequest（无状态）
+ * - 1 个 GenerationRequest（保存原始提示词 + 优化后提示词）
  * - 4 个 GeneratedImage（imageStatus=PENDING，imageUrl=null，imagePrompt=风格变体）
  * - 4 个 ImageGenerationJob（status=PENDING）
  *
  * @param userId 用户ID
- * @param prompt 文本提示词（已验证）
+ * @param prompt 优化后的提示词（用于实际生成图片）
+ * @param originalPrompt 用户原始输入的提示词（用于前端显示）
  * @returns 创建的生成请求对象（包含关联的 Images 和 Jobs）
  * @throws ValidationError - 提示词验证失败
  */
-export async function createRequest(userId: string, prompt: string) {
+export async function createRequest(userId: string, prompt: string, originalPrompt?: string) {
 	const trimmedPrompt = prompt.trim();
 
 	// 验证提示词不为空
@@ -108,11 +109,12 @@ export async function createRequest(userId: string, prompt: string) {
 	const requestId = createId();
 
 	await db.transaction(async (tx) => {
-		// 步骤 1: 创建 GenerationRequest
+		// 步骤 1: 创建 GenerationRequest（保存原始提示词 + 优化后提示词）
 		await tx.insert(generationRequests).values({
 			id: requestId,
 			externalUserId: userId,
-			prompt: trimmedPrompt,
+			prompt: trimmedPrompt, // ✅ 优化后的提示词（用于实际生成图片）
+			originalPrompt: originalPrompt || trimmedPrompt, // ✅ 用户原始输入（用于前端显示）
 			status: 'IMAGE_PENDING',
 			phase: 'IMAGE_GENERATION',
 		});

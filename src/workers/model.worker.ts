@@ -161,12 +161,12 @@ async function processModelJob(job: Job<ModelJobData>) {
 					completedAt,
 				});
 
-			// ✅ 更新 GenerationRequest 状态为 COMPLETED
-			await generationRequestRepository.update(requestId, {
-				status: 'COMPLETED',
-				phase: 'COMPLETED',
-				completedAt,
-			});
+				// ✅ 更新 GenerationRequest 状态为 COMPLETED
+				await generationRequestRepository.update(requestId, {
+					status: 'COMPLETED',
+					phase: 'COMPLETED',
+					completedAt,
+				});
 
 				logger.info({
 					msg: '✅ 3D模型生成任务完成',

@@ -1,9 +1,9 @@
 import { createId } from '@paralleldrive/cuid2';
 import { relations } from 'drizzle-orm';
 import { index, int, mysqlTable, text, timestamp, varchar } from 'drizzle-orm/mysql-core';
-import { modelSourceEnum, modelVisibilityEnum, printStatusEnum } from './enums.js';
-import { generatedImages } from './generated-images.js';
-import { generationRequests } from './generation-requests.js';
+import { modelSourceEnum, modelVisibilityEnum, printStatusEnum } from './enums';
+import { generatedImages } from './generated-images';
+import { generationRequests } from './generation-requests';
 
 /**
  * 模型表（统一管理 AI 生成和用户上传）
@@ -89,5 +89,5 @@ export type Model = typeof models.$inferSelect;
 export type NewModel = typeof models.$inferInsert;
 
 // 导入循环依赖
-import { modelGenerationJobs } from './model-generation-jobs.js';
-import { modelInteractions } from './model-interactions.js';
+import { modelGenerationJobs } from './model-generation-jobs';
+import { modelInteractions } from './model-interactions';

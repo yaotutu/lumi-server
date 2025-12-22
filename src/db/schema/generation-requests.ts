@@ -1,7 +1,7 @@
 import { createId } from '@paralleldrive/cuid2';
 import { relations } from 'drizzle-orm';
 import { index, int, mysqlTable, text, timestamp, varchar } from 'drizzle-orm/mysql-core';
-import { requestPhaseEnum, requestStatusEnum } from './enums.js';
+import { requestPhaseEnum, requestStatusEnum } from './enums';
 
 /**
  * 生成请求表（主任务）
@@ -15,7 +15,8 @@ export const generationRequests = mysqlTable(
 			.$defaultFn(() => createId()),
 
 		externalUserId: varchar('external_user_id', { length: 36 }).notNull(),
-		prompt: text('prompt').notNull(),
+		prompt: text('prompt').notNull(), // ✅ 优化后的提示词（用于实际生成图片）
+		originalPrompt: text('original_prompt'), // ✅ 用户原始输入的提示词
 
 		// 状态管理
 		status: requestStatusEnum.notNull().default('IMAGE_PENDING'),
@@ -46,5 +47,5 @@ export type GenerationRequest = typeof generationRequests.$inferSelect;
 export type NewGenerationRequest = typeof generationRequests.$inferInsert;
 
 // 导入循环依赖
-import { generatedImages } from './generated-images.js';
-import { models } from './models.js';
+import { generatedImages } from './generated-images';
+import { models } from './models';
