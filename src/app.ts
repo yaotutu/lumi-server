@@ -37,9 +37,10 @@ export async function buildApp() {
 		crossOriginResourcePolicy: { policy: 'cross-origin' }, // ✅ 允许跨域资源加载（解决图片代理 CORP 问题）
 	});
 
-	// CORS 配置
+	// CORS 配置 - 允许所有来源（开发环境）
 	await app.register(cors, {
-		origin: config.cors.origins, // 使用具体的前端域名列表
+		origin: true, // ✅ 允许所有来源（开发时使用，生产环境应改为具体域名）
+		credentials: true, // 允许携带凭证（Cookie、Authorization header）
 		methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], // 明确允许的 HTTP 方法
 		allowedHeaders: ['Content-Type', 'Authorization'], // 允许的请求头
 	});

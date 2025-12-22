@@ -5,6 +5,7 @@
 
 import type { FastifyInstance } from 'fastify';
 import { imageQueue, modelQueue } from '@/queues';
+import { getWorkersStatusSchema } from '@/schemas/routes/workers.schema';
 import { success } from '@/utils/response';
 
 /**
@@ -24,70 +25,93 @@ export async function workerRoutes(fastify: FastifyInstance) {
 	 *   }
 	 * }
 	 */
-	fastify.get('/api/workers/status', async (_request, reply) => {
-		try {
-			// 获取队列状态（BullMQ）
-			const [imageWaiting, imageActive, model3dWaiting, model3dActive] = await Promise.all([
-				imageQueue.getWaitingCount(),
-				imageQueue.getActiveCount(),
-				modelQueue.getWaitingCount(),
-				modelQueue.getActiveCount(),
-			]);
+	fastify.get(
+		'/api/workers/status',
+		{ schema: getWorkersStatusSchema },
+		async (_request, reply) => {
+			try {
+				// 获取队列状态（BullMQ）
+				const [imageWaiting, imageActive, imageCompleted, imageFailed] = await Promise.all([
+					imageQueue.getWaitingCount(),
+					imageQueue.getActiveCount(),
+					imageQueue.getCompletedCount(),
+					imageQueue.getFailedCount(),
+				]);
 
-			// 获取正在处理的任务 ID
-			const [imageActiveJobs, model3dActiveJobs] = await Promise.all([
-				imageQueue.getActive(),
-				modelQueue.getActive(),
-			]);
+				const [model3dWaiting, model3dActive, model3dCompleted, model3dFailed] = await Promise.all([
+					modelQueue.getWaitingCount(),
+					modelQueue.getActiveCount(),
+					modelQueue.getCompletedCount(),
+					modelQueue.getFailedCount(),
+				]);
 
-			// 构建响应格式
-			const imageStatus = {
-				isRunning: imageActive > 0 || imageWaiting > 0,
-				processingCount: imageActive,
-				processingJobIds: imageActiveJobs.map((job) => job.id).filter((id): id is string => !!id),
-				config: {
-					queueName: 'image-generation',
-					waitingCount: imageWaiting,
-					activeCount: imageActive,
-				},
-			};
-
-			const model3dStatus = {
-				isRunning: model3dActive > 0 || model3dWaiting > 0,
-				processingCount: model3dActive,
-				processingJobIds: model3dActiveJobs.map((job) => job.id).filter((id): id is string => !!id),
-				config: {
-					queueName: 'model3d-generation',
-					waitingCount: model3dWaiting,
-					activeCount: model3dActive,
-				},
-			};
-
-			// JSend success 格式
-			return reply.send(
-				success({
-					image: imageStatus,
-					model3d: model3dStatus,
-				}),
-			);
-		} catch (_error) {
-			// 如果队列未初始化，返回默认状态
-			return reply.send(
-				success({
-					image: {
-						isRunning: false,
-						processingCount: 0,
-						processingJobIds: [],
-						config: null,
+				// 构建 workers 数组格式
+				const workers = [
+					{
+						name: 'Image Generation Worker',
+						status: (imageActive > 0 ? 'running' : 'stopped') as 'running' | 'stopped' | 'error',
+						queueName: 'image-generation',
+						concurrency: 2, // 从配置中获取
+						stats: {
+							active: imageActive,
+							waiting: imageWaiting,
+							completed: imageCompleted,
+							failed: imageFailed,
+						},
 					},
-					model3d: {
-						isRunning: false,
-						processingCount: 0,
-						processingJobIds: [],
-						config: null,
+					{
+						name: 'Model Generation Worker',
+						status: (model3dActive > 0 ? 'running' : 'stopped') as 'running' | 'stopped' | 'error',
+						queueName: 'model3d-generation',
+						concurrency: 1, // 从配置中获取
+						stats: {
+							active: model3dActive,
+							waiting: model3dWaiting,
+							completed: model3dCompleted,
+							failed: model3dFailed,
+						},
 					},
-				}),
-			);
-		}
-	});
+				];
+
+				// JSend success 格式
+				return reply.send(
+					success({
+						workers,
+					}),
+				);
+			} catch (_error) {
+				// 如果队列未初始化，返回默认状态
+				return reply.send(
+					success({
+						workers: [
+							{
+								name: 'Image Generation Worker',
+								status: 'stopped' as const,
+								queueName: 'image-generation',
+								concurrency: 2,
+								stats: {
+									active: 0,
+									waiting: 0,
+									completed: 0,
+									failed: 0,
+								},
+							},
+							{
+								name: 'Model Generation Worker',
+								status: 'stopped' as const,
+								queueName: 'model3d-generation',
+								concurrency: 1,
+								stats: {
+									active: 0,
+									waiting: 0,
+									completed: 0,
+									failed: 0,
+								},
+							},
+						],
+					}),
+				);
+			}
+		},
+	);
 }

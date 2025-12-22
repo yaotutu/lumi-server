@@ -1,0 +1,118 @@
+/**
+ * Users 路由 Schema (TypeBox 版本)
+ * 对应 /api/users 相关端点（代理外部用户服务）
+ */
+
+import { Type } from '@sinclair/typebox';
+import { IdParam, JSendFail, JSendSuccess } from '../common';
+import { UserEntity } from '../entities';
+
+/**
+ * GET /api/users/info - 获取当前用户信息
+ */
+export const getUserInfoSchema = {
+	tags: ['用户'],
+	summary: '获取当前用户信息',
+	description: '获取当前登录用户的详细信息（需要 Bearer Token）',
+	response: {
+		200: JSendSuccess(UserEntity),
+		400: JSendFail, // 用户服务返回的错误
+		401: JSendFail, // 未认证
+		500: JSendFail, // 服务器内部错误
+	},
+} as const;
+
+/**
+ * GET /api/users/:id - 获取指定用户信息
+ */
+export const getUserByIdSchema = {
+	tags: ['用户'],
+	summary: '获取指定用户信息',
+	description: '获取指定 ID 的用户详细信息（需要 Bearer Token）',
+	params: IdParam,
+	response: {
+		200: JSendSuccess(UserEntity),
+		400: JSendFail, // 用户服务返回的错误
+		401: JSendFail, // 未认证
+		404: JSendFail, // 用户不存在
+		500: JSendFail, // 服务器内部错误
+	},
+} as const;
+
+/**
+ * POST /api/users/update - 更新用户信息
+ */
+export const updateUserSchema = {
+	tags: ['用户'],
+	summary: '更新用户信息',
+	description: '更新用户的昵称、头像、性别等信息（需要 Bearer Token）',
+	body: Type.Object({
+		id: Type.String({ description: '用户 ID' }),
+		nick_name: Type.Optional(Type.String({ description: '昵称' })),
+		avatar: Type.Optional(Type.String({ format: 'uri', description: '头像 URL' })),
+		gender: Type.Optional(Type.String({ description: '性别' })),
+	}),
+	response: {
+		200: JSendSuccess(
+			Type.Object({
+				message: Type.String({ description: '提示信息' }),
+			}),
+		),
+		401: Type.Object({
+			status: Type.Literal('fail'),
+			data: Type.Object({
+				message: Type.String(),
+				code: Type.String(),
+			}),
+		}),
+	},
+} as const;
+
+/**
+ * POST /api/users/logout - 用户登出
+ */
+export const userLogoutSchema = {
+	tags: ['用户'],
+	summary: '用户登出',
+	description: '注销当前登录会话（需要 Bearer Token）',
+	response: {
+		200: JSendSuccess(
+			Type.Object({
+				message: Type.String({ description: '提示信息' }),
+			}),
+		),
+		400: JSendFail, // 用户服务返回的错误
+		401: JSendFail, // 未认证
+		500: JSendFail, // 服务器内部错误
+	},
+} as const;
+
+/**
+ * POST /api/users/modify-password - 修改密码
+ */
+export const modifyPasswordSchema = {
+	tags: ['用户'],
+	summary: '修改密码',
+	description: '修改用户登录密码（需要 Bearer Token）',
+	body: Type.Object({
+		id: Type.String({ description: '用户 ID' }),
+		old_password: Type.Optional(Type.String({ description: '旧密码' })),
+		new_password: Type.String({ minLength: 6, description: '新密码（最少 6 位）' }),
+		repassword: Type.String({ description: '确认新密码' }),
+		random_code: Type.String({ description: '验证码' }),
+	}),
+	response: {
+		200: JSendSuccess(
+			Type.Object({
+				message: Type.String({ description: '提示信息' }),
+			}),
+		),
+		401: Type.Object({
+			status: Type.Literal('fail'),
+			data: Type.Object({
+				message: Type.String(),
+				code: Type.String(),
+			}),
+		}),
+	},
+} as const;

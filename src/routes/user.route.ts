@@ -12,6 +12,13 @@
  */
 
 import type { FastifyInstance } from 'fastify';
+import {
+	getUserByIdSchema,
+	getUserInfoSchema,
+	modifyPasswordSchema,
+	updateUserSchema,
+	userLogoutSchema,
+} from '@/schemas/routes/users.schema';
 import { logger } from '@/utils/logger';
 import { fail, success } from '@/utils/response';
 
@@ -61,7 +68,7 @@ export async function userRoutes(fastify: FastifyInstance) {
 	 * GET /api/users/info
 	 * 获取当前登录用户信息
 	 */
-	fastify.get('/api/users/info', async (request, reply) => {
+	fastify.get('/api/users/info', { schema: getUserInfoSchema }, async (request, reply) => {
 		try {
 			const authHeader = request.headers.authorization;
 			if (!authHeader) {
@@ -75,7 +82,7 @@ export async function userRoutes(fastify: FastifyInstance) {
 			}
 
 			return reply
-				.code(data.code || 400)
+				.code((data.code || 400) as 200 | 400 | 401 | 500)
 				.send(fail(data.msg || '获取用户信息失败', 'USER_SERVICE_ERROR'));
 		} catch (error) {
 			logger.error({ msg: '获取用户信息失败', error });
@@ -87,29 +94,33 @@ export async function userRoutes(fastify: FastifyInstance) {
 	 * GET /api/users/:id
 	 * 获取指定用户信息
 	 */
-	fastify.get<{ Params: { id: string } }>('/api/users/:id', async (request, reply) => {
-		try {
-			const authHeader = request.headers.authorization;
-			if (!authHeader) {
-				return reply.code(401).send(fail('未提供认证凭证', 'UNAUTHENTICATED'));
+	fastify.get<{ Params: { id: string } }>(
+		'/api/users/:id',
+		{ schema: getUserByIdSchema },
+		async (request, reply) => {
+			try {
+				const authHeader = request.headers.authorization;
+				if (!authHeader) {
+					return reply.code(401).send(fail('未提供认证凭证', 'UNAUTHENTICATED'));
+				}
+
+				const { id } = request.params;
+
+				const { data } = await proxyToUserService(authHeader, 'GET', `/api/v1.0/${id}`);
+
+				if (data.code === 200) {
+					return reply.send(success(data.data));
+				}
+
+				return reply
+					.code((data.code || 400) as 200 | 400 | 401 | 500)
+					.send(fail(data.msg || '获取用户信息失败', 'USER_SERVICE_ERROR'));
+			} catch (error) {
+				logger.error({ msg: '获取用户信息失败', error });
+				return reply.code(500).send(fail('服务器内部错误', 'INTERNAL_ERROR'));
 			}
-
-			const { id } = request.params;
-
-			const { data } = await proxyToUserService(authHeader, 'GET', `/api/v1.0/${id}`);
-
-			if (data.code === 200) {
-				return reply.send(success(data.data));
-			}
-
-			return reply
-				.code(data.code || 400)
-				.send(fail(data.msg || '获取用户信息失败', 'USER_SERVICE_ERROR'));
-		} catch (error) {
-			logger.error({ msg: '获取用户信息失败', error });
-			return reply.code(500).send(fail('服务器内部错误', 'INTERNAL_ERROR'));
-		}
-	});
+		},
+	);
 
 	/**
 	 * POST /api/users/update
@@ -122,7 +133,7 @@ export async function userRoutes(fastify: FastifyInstance) {
 			avatar?: string;
 			gender?: string;
 		};
-	}>('/api/users/update', async (request, reply) => {
+	}>('/api/users/update', { schema: updateUserSchema }, async (request, reply) => {
 		try {
 			const authHeader = request.headers.authorization;
 			if (!authHeader) {
@@ -141,7 +152,7 @@ export async function userRoutes(fastify: FastifyInstance) {
 			}
 
 			return reply
-				.code(data.code || 400)
+				.code((data.code || 400) as 200 | 400 | 401 | 500)
 				.send(fail(data.msg || '更新用户信息失败', 'USER_SERVICE_ERROR'));
 		} catch (error) {
 			logger.error({ msg: '更新用户信息失败', error });
@@ -153,7 +164,7 @@ export async function userRoutes(fastify: FastifyInstance) {
 	 * POST /api/users/logout
 	 * 用户登出
 	 */
-	fastify.post('/api/users/logout', async (request, reply) => {
+	fastify.post('/api/users/logout', { schema: userLogoutSchema }, async (request, reply) => {
 		try {
 			const authHeader = request.headers.authorization;
 			if (!authHeader) {
@@ -166,7 +177,9 @@ export async function userRoutes(fastify: FastifyInstance) {
 				return reply.send(success({ message: data.msg || '登出成功' }));
 			}
 
-			return reply.code(data.code || 400).send(fail(data.msg || '登出失败', 'USER_SERVICE_ERROR'));
+			return reply
+				.code((data.code || 400) as 200 | 400 | 401 | 500)
+				.send(fail(data.msg || '登出失败', 'USER_SERVICE_ERROR'));
 		} catch (error) {
 			logger.error({ msg: '登出失败', error });
 			return reply.code(500).send(fail('服务器内部错误', 'INTERNAL_ERROR'));
@@ -185,7 +198,7 @@ export async function userRoutes(fastify: FastifyInstance) {
 			repassword: string;
 			random_code: string;
 		};
-	}>('/api/users/modify-password', async (request, reply) => {
+	}>('/api/users/modify-password', { schema: modifyPasswordSchema }, async (request, reply) => {
 		try {
 			const authHeader = request.headers.authorization;
 			if (!authHeader) {
@@ -204,7 +217,7 @@ export async function userRoutes(fastify: FastifyInstance) {
 			}
 
 			return reply
-				.code(data.code || 400)
+				.code((data.code || 400) as 200 | 400 | 401 | 500)
 				.send(fail(data.msg || '修改密码失败', 'USER_SERVICE_ERROR'));
 		} catch (error) {
 			logger.error({ msg: '修改密码失败', error });

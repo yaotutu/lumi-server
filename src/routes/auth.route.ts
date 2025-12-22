@@ -18,6 +18,13 @@
 import type { FastifyInstance } from 'fastify';
 import { getUserServiceClient } from '@/clients/user-service.client';
 import config from '@/config/index';
+import {
+	getMeSchema,
+	loginSchema,
+	logoutSchema,
+	registerSchema,
+	sendCodeSchema,
+} from '@/schemas/auth.schema';
 import { logger } from '@/utils/logger';
 import { fail, success } from '@/utils/response';
 
@@ -34,20 +41,8 @@ export async function authRoutes(fastify: FastifyInstance) {
 	/**
 	 * POST /api/auth/send-code
 	 * 发送邮箱验证码
-	 *
-	 * 请求体：
-	 * {
-	 *   "email": "user@example.com",
-	 *   "type": "login" | "register" | "modify_password"
-	 * }
-	 *
-	 * 响应格式：
-	 * {
-	 *   "status": "success",
-	 *   "data": null
-	 * }
 	 */
-	fastify.post('/api/auth/send-code', async (request, reply) => {
+	fastify.post('/api/auth/send-code', { schema: sendCodeSchema }, async (request, reply) => {
 		try {
 			const { email, type } = request.body as {
 				email: string;
@@ -71,20 +66,8 @@ export async function authRoutes(fastify: FastifyInstance) {
 	/**
 	 * POST /api/auth/register
 	 * 用户注册
-	 *
-	 * 请求体：
-	 * {
-	 *   "email": "user@example.com",
-	 *   "code": "ABC123"
-	 * }
-	 *
-	 * 响应格式：
-	 * {
-	 *   "status": "success",
-	 *   "data": null
-	 * }
 	 */
-	fastify.post('/api/auth/register', async (request, reply) => {
+	fastify.post('/api/auth/register', { schema: registerSchema }, async (request, reply) => {
 		try {
 			const { email, code } = request.body as {
 				email: string;
@@ -107,23 +90,9 @@ export async function authRoutes(fastify: FastifyInstance) {
 
 	/**
 	 * POST /api/auth/login
-	 * 用户登录（验证码方式）
-	 *
-	 * 请求体：
-	 * {
-	 *   "email": "user@example.com",
-	 *   "code": "ABC123"
-	 * }
-	 *
-	 * 响应格式：
-	 * {
-	 *   "status": "success",
-	 *   "data": {
-	 *     "token": "Bearer eyJhbGc..."
-	 *   }
-	 * }
+	 * 用户登录
 	 */
-	fastify.post('/api/auth/login', async (request, reply) => {
+	fastify.post('/api/auth/login', { schema: loginSchema }, async (request, reply) => {
 		try {
 			const { email, code } = request.body as {
 				email: string;
@@ -151,24 +120,8 @@ export async function authRoutes(fastify: FastifyInstance) {
 	/**
 	 * GET /api/auth/me
 	 * 获取当前用户信息
-	 *
-	 * 响应格式：
-	 * {
-	 *   "status": "success",
-	 *   "data": {
-	 *     "status": "authenticated" | "unauthenticated" | "error",
-	 *     "user": {
-	 *       "id": "external_user_id",
-	 *       "email": "...",
-	 *       "userName": "...",
-	 *       "nickName": "...",
-	 *       "avatar": "...",
-	 *       "gender": "..."
-	 *     } | null
-	 *   }
-	 * }
 	 */
-	fastify.get('/api/auth/me', async (request, reply) => {
+	fastify.get('/api/auth/me', { schema: getMeSchema }, async (request, reply) => {
 		try {
 			// 从 Authorization header 获取 Token
 			const authHeader = request.headers.authorization;
@@ -220,14 +173,8 @@ export async function authRoutes(fastify: FastifyInstance) {
 	/**
 	 * POST /api/auth/logout
 	 * 退出登录
-	 *
-	 * 响应格式：
-	 * {
-	 *   "status": "success",
-	 *   "data": null
-	 * }
 	 */
-	fastify.post('/api/auth/logout', async (request, reply) => {
+	fastify.post('/api/auth/logout', { schema: logoutSchema }, async (request, reply) => {
 		try {
 			// 从 Authorization header 获取 Token
 			const authHeader = request.headers.authorization;
