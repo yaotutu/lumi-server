@@ -141,6 +141,12 @@ async function processImageJob(job: Job<ImageJobData>) {
 			completedAt: new Date(),
 		});
 
+		// ✅ 立即更新 GenerationRequest 的 updatedAt（触发前端轮询更新）
+		// 这样前端不需要等所有图片完成，每张图片完成后都能立即看到
+		await generationRequestRepository.update(requestId, {
+			updatedAt: new Date(),
+		});
+
 		// 检查是否所有图片都生成完成
 		const allImages = await generatedImageRepository.findByRequestId(requestId);
 		const allCompleted = allImages.every((img) => img.imageStatus === 'COMPLETED');
