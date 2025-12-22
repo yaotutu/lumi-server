@@ -73,7 +73,7 @@ export class ModelRepository {
 				// 关联 request 信息
 				request: {
 					id: generationRequests.id,
-					prompt: generationRequests.prompt,
+					prompt: generationRequests.originalPrompt,
 					status: generationRequests.status,
 					phase: generationRequests.phase,
 				},

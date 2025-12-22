@@ -15,7 +15,9 @@ export const TaskEntity = Type.Object(
 	{
 		id: Type.String({ description: '任务 ID' }),
 		externalUserId: Type.String({ description: '外部用户 ID' }),
-		prompt: Type.String({ description: '提示词' }),
+		originalPrompt: Type.Union([Type.String(), Type.Null()], {
+			description: '用户原始输入的提示词',
+		}),
 		status: RequestStatusEnum,
 		phase: RequestPhaseEnum,
 		selectedImageIndex: Type.Union([Type.Integer({ minimum: 0, maximum: 3 }), Type.Null()], {

@@ -15,7 +15,6 @@ export const generationRequests = mysqlTable(
 			.$defaultFn(() => createId()),
 
 		externalUserId: varchar('external_user_id', { length: 36 }).notNull(),
-		prompt: text('prompt').notNull(), // ✅ 优化后的提示词（用于实际生成图片）
 		originalPrompt: text('original_prompt'), // ✅ 用户原始输入的提示词
 
 		// 状态管理

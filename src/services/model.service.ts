@@ -88,7 +88,9 @@ export async function createModelForRequest(requestId: string, imageIndex: numbe
 	if (selectedImage.imageStatus !== 'COMPLETED' || !selectedImage.imageUrl) {
 		throw new InvalidStateError('选中的图片尚未生成完成');
 	}
-	const modelName = `${request.prompt.substring(0, 20)}_model`;
+	// ✅ 使用 originalPrompt（用户原始输入）生成模型名称，回退到 requestId 的前 20 个字符
+	const promptForName = request.originalPrompt || request.id;
+	const modelName = `${promptForName.substring(0, 20)}_model`;
 	await generationRequestRepository.update(requestId, { selectedImageIndex: imageIndex });
 
 	// 创建 Model 记录（默认为 PUBLIC）

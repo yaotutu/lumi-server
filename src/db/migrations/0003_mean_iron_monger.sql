@@ -1,0 +1,1 @@
+ALTER TABLE `generation_requests` MODIFY COLUMN `prompt` text;

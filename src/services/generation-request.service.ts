@@ -57,18 +57,17 @@ export async function getRequestById(requestId: string) {
  * 创建新的生成请求
  *
  * 使用数据库事务确保原子性：
- * - 1 个 GenerationRequest（保存原始提示词 + 优化后提示词）
+ * - 1 个 GenerationRequest（只保存用户原始输入）
  * - 4 个 GeneratedImage（imageStatus=PENDING，imageUrl=null，imagePrompt=风格变体）
  * - 4 个 ImageGenerationJob（status=PENDING）
  *
  * @param userId 用户ID
- * @param prompt 优化后的提示词（用于实际生成图片）
- * @param originalPrompt 用户原始输入的提示词（用于前端显示）
+ * @param originalPrompt 用户原始输入的提示词
  * @returns 创建的生成请求对象（包含关联的 Images 和 Jobs）
  * @throws ValidationError - 提示词验证失败
  */
-export async function createRequest(userId: string, prompt: string, originalPrompt?: string) {
-	const trimmedPrompt = prompt.trim();
+export async function createRequest(userId: string, originalPrompt: string) {
+	const trimmedPrompt = originalPrompt.trim();
 
 	// 验证提示词不为空
 	if (trimmedPrompt.length === 0) {
@@ -88,8 +87,9 @@ export async function createRequest(userId: string, prompt: string, originalProm
 
 	let promptVariants: string[];
 	try {
-		const { generateMultiStylePrompts } = await import('./prompt-optimizer.service.js');
-		promptVariants = await generateMultiStylePrompts(trimmedPrompt);
+		const { processUserPromptForImageGeneration } = await import('./prompt-optimizer.service');
+		const result = await processUserPromptForImageGeneration(trimmedPrompt);
+		promptVariants = result.prompts;
 
 		logger.info({
 			msg: '✅ 提示词变体生成成功',
@@ -109,14 +109,12 @@ export async function createRequest(userId: string, prompt: string, originalProm
 	const requestId = createId();
 
 	await db.transaction(async (tx) => {
-		// 步骤 1: 创建 GenerationRequest（保存原始提示词 + 优化后提示词）
+		// 步骤 1: 创建 GenerationRequest（只保存用户原始输入）
 		await tx.insert(generationRequests).values({
 			id: requestId,
 			externalUserId: userId,
-			prompt: trimmedPrompt, // ✅ 优化后的提示词（用于实际生成图片）
-			originalPrompt: originalPrompt || trimmedPrompt, // ✅ 用户原始输入（用于前端显示）
-			status: 'IMAGE_PENDING',
-			phase: 'IMAGE_GENERATION',
+			originalPrompt: trimmedPrompt, // ✅ 只保存用户原始输入
+			// prompt 字段已废弃，不再使用
 		});
 
 		// 步骤 2: 创建 4 个 GeneratedImage 记录（每个使用不同的提示词变体）

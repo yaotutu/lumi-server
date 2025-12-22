@@ -22,6 +22,20 @@
 			"when": 1766405387594,
 			"tag": "0002_ancient_millenium_guard",
 			"breakpoints": true
+		},
+		{
+			"idx": 3,
+			"version": "5",
+			"when": 1766406953151,
+			"tag": "0003_mean_iron_monger",
+			"breakpoints": true
+		},
+		{
+			"idx": 4,
+			"version": "5",
+			"when": 1766407633254,
+			"tag": "0004_common_supernaut",
+			"breakpoints": true
 		}
 	]
 }

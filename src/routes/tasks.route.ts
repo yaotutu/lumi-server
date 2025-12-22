@@ -4,7 +4,6 @@
  */
 
 import type { FastifyInstance } from 'fastify';
-import { config } from '@/config/index.js';
 import { imageQueue } from '@/queues';
 import {
 	createTaskSchema,
@@ -17,7 +16,6 @@ import {
 	submitPrintSchema,
 } from '@/schemas/routes/tasks.schema';
 import * as GenerationRequestService from '@/services/generation-request.service';
-import * as PromptOptimizerService from '@/services/prompt-optimizer.service';
 import { ValidationError } from '@/utils/errors';
 import { logger } from '@/utils/logger';
 import { getUserIdFromRequest } from '@/utils/request-auth';
@@ -101,30 +99,21 @@ export async function taskRoutes(fastify: FastifyInstance) {
 	fastify.post<{
 		Body: {
 			prompt: string;
-			optimizePrompt?: boolean;
 		};
 	}>('/api/tasks', { schema: createTaskSchema }, async (request, reply) => {
 		try {
 			const userId = getUserIdFromRequest(request);
-			const { prompt, optimizePrompt = true } = request.body;
+			const { prompt } = request.body;
 
 			// 验证提示词
 			if (!prompt || prompt.trim().length === 0) {
 				throw new ValidationError('提示词不能为空');
 			}
 
-			// 优化提示词 (可选)
-			let finalPrompt = prompt.trim();
-			if (optimizePrompt) {
-				logger.info({ msg: '开始优化提示词', originalPrompt: prompt });
-				finalPrompt = await PromptOptimizerService.optimizePromptFor3DPrint(prompt);
-			}
-
-			// ✅ 创建生成请求（保存原始提示词 + 优化后提示词）
+			// ✅ 创建生成请求（只保存用户原始输入，提示词处理逻辑在 Service 层）
 			const generationRequest = await GenerationRequestService.createRequest(
 				userId,
-				finalPrompt, // ✅ 优化后的提示词（用于实际生成图片）
-				prompt.trim(), // ✅ 用户原始输入（用于前端显示）
+				prompt.trim(), // ✅ 只传递用户原始输入
 			);
 
 			// ✅ 将 4 个已创建的 ImageJob 加入 BullMQ 队列
@@ -136,10 +125,11 @@ export async function taskRoutes(fastify: FastifyInstance) {
 						throw new Error(`Image ${image.id} 没有关联的 Job`);
 					}
 
+					// ✅ 使用每张图片各自的 imagePrompt（已在 Service 层生成的风格变体）
 					return imageQueue.add(`image-${image.id}`, {
 						jobId: job.id, // ✅ 正确的 ImageJob ID
 						imageId: image.id, // ✅ 正确的 Image ID
-						prompt: finalPrompt,
+						prompt: image.imagePrompt || prompt.trim(), // ✅ 使用该图片对应的风格变体提示词
 						requestId: generationRequest.id,
 						userId,
 					});
