@@ -4,7 +4,6 @@
  */
 
 import type { FastifyInstance } from 'fastify';
-import { imageQueue } from '@/queues';
 import {
 	createTaskSchema,
 	deleteTaskSchema,
@@ -110,40 +109,28 @@ export async function taskRoutes(fastify: FastifyInstance) {
 				throw new ValidationError('提示词不能为空');
 			}
 
-			// ✅ 创建生成请求（只保存用户原始输入，提示词处理逻辑在 Service 层）
+			// ✅ 创建生成请求（快速返回，不等待 LLM 和队列）
 			const generationRequest = await GenerationRequestService.createRequest(
 				userId,
-				prompt.trim(), // ✅ 只传递用户原始输入
+				prompt.trim(),
 			);
 
-			// ✅ 将 4 个已创建的 ImageJob 加入 BullMQ 队列
-			const imageJobs = await Promise.all(
-				generationRequest.images.map(async (image) => {
-					// 获取该 Image 关联的 Job（generationJob 字段）
-					const job = image.generationJob;
-					if (!job || !job.id) {
-						throw new Error(`Image ${image.id} 没有关联的 Job`);
-					}
-
-					// ✅ 使用每张图片各自的 imagePrompt（已在 Service 层生成的风格变体）
-					return imageQueue.add(`image-${image.id}`, {
-						jobId: job.id, // ✅ 正确的 ImageJob ID
-						imageId: image.id, // ✅ 正确的 Image ID
-						prompt: image.imagePrompt || prompt.trim(), // ✅ 使用该图片对应的风格变体提示词
-						requestId: generationRequest.id,
-						userId,
-					});
-				}),
-			);
-
-			logger.info({
-				msg: '✅ 生成请求创建成功，已加入队列',
-				requestId: generationRequest.id,
-				imageCount: generationRequest.images.length,
-				jobCount: imageJobs.length,
+			// ✅ 使用 setImmediate 触发后台异步处理（生成提示词 + 加入队列）
+			setImmediate(() => {
+				GenerationRequestService.processPromptAndEnqueueJobs(
+					generationRequest.id,
+					prompt.trim(),
+					userId,
+				);
 			});
 
-			// JSend success 格式 - 直接返回 generationRequest
+			logger.info({
+				msg: '✅ 生成请求创建成功，后台任务已触发',
+				requestId: generationRequest.id,
+				imageCount: generationRequest.images.length,
+			});
+
+			// JSend success 格式 - 立即返回 generationRequest（此时 imagePrompt 为 null，后续异步填充）
 			return reply.status(201).send(success(generationRequest));
 		} catch (error) {
 			logger.error({ msg: '创建生成请求失败', error });

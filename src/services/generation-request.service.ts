@@ -10,10 +10,11 @@
 import { createId } from '@paralleldrive/cuid2';
 import { db } from '@/db/drizzle';
 import { generatedImages, generationRequests, imageGenerationJobs } from '@/db/schema';
-import { modelQueue } from '@/queues';
+import { imageQueue, modelQueue } from '@/queues';
 import {
 	generatedImageRepository,
 	generationRequestRepository,
+	imageJobRepository,
 	modelJobRepository,
 	modelRepository,
 	orphanedFileRepository,
@@ -54,12 +55,14 @@ export async function getRequestById(requestId: string) {
 }
 
 /**
- * 创建新的生成请求
+ * 创建新的生成请求（快速返回版本）
  *
  * 使用数据库事务确保原子性：
  * - 1 个 GenerationRequest（只保存用户原始输入）
- * - 4 个 GeneratedImage（imageStatus=PENDING，imageUrl=null，imagePrompt=风格变体）
+ * - 4 个 GeneratedImage（imageStatus=PENDING，imageUrl=null，imagePrompt=null）
  * - 4 个 ImageGenerationJob（status=PENDING）
+ *
+ * 注意：imagePrompt 初始为 null，后续由后台异步任务填充
  *
  * @param userId 用户ID
  * @param originalPrompt 用户原始输入的提示词
@@ -79,32 +82,6 @@ export async function createRequest(userId: string, originalPrompt: string) {
 		throw new ValidationError('提示词长度不能超过500个字符');
 	}
 
-	// 🤖 生成 4 个不同风格的提示词变体
-	logger.info({
-		msg: '🎨 开始生成多风格提示词变体',
-		originalPrompt: trimmedPrompt,
-	});
-
-	let promptVariants: string[];
-	try {
-		const { processUserPromptForImageGeneration } = await import('./prompt-optimizer.service');
-		const result = await processUserPromptForImageGeneration(trimmedPrompt);
-		promptVariants = result.prompts;
-
-		logger.info({
-			msg: '✅ 提示词变体生成成功',
-			variantsCount: promptVariants.length,
-			variants: promptVariants,
-		});
-	} catch (error) {
-		// 降级策略：LLM 调用失败时，使用原始提示词的 4 个副本
-		logger.warn({
-			msg: '⚠️ 提示词变体生成失败，使用原始提示词',
-			error: error instanceof Error ? error.message : String(error),
-		});
-		promptVariants = [trimmedPrompt, trimmedPrompt, trimmedPrompt, trimmedPrompt];
-	}
-
 	// ✅ 使用数据库事务确保原子性
 	const requestId = createId();
 
@@ -114,17 +91,16 @@ export async function createRequest(userId: string, originalPrompt: string) {
 			id: requestId,
 			externalUserId: userId,
 			originalPrompt: trimmedPrompt, // ✅ 只保存用户原始输入
-			// prompt 字段已废弃，不再使用
 		});
 
-		// 步骤 2: 创建 4 个 GeneratedImage 记录（每个使用不同的提示词变体）
+		// 步骤 2: 创建 4 个 GeneratedImage 记录（imagePrompt 初始为 null，后续异步填充）
 		const imageRecords = Array.from({ length: 4 }, (_, index) => ({
 			id: createId(),
 			requestId,
 			index,
 			imageStatus: 'PENDING' as const,
 			imageUrl: null,
-			imagePrompt: promptVariants[index], // ✅ 分配对应的提示词变体
+			imagePrompt: null, // ✅ 初始为 null，后续由后台任务填充
 		}));
 		await tx.insert(generatedImages).values(imageRecords);
 
@@ -139,18 +115,135 @@ export async function createRequest(userId: string, originalPrompt: string) {
 		await tx.insert(imageGenerationJobs).values(jobRecords);
 
 		logger.info({
-			msg: '✅ 创建生成请求（事务）',
+			msg: '✅ 快速创建生成请求（事务）',
 			requestId,
 			imageIds: imageRecords.map((i) => i.id).join(','),
 			jobIds: jobRecords.map((j) => j.id).join(','),
-			promptVariantsAssigned: imageRecords.map(
-				(i, idx) => `[${idx}]: ${i.imagePrompt?.substring(0, 50)}...`,
-			),
+			note: 'imagePrompt 将由后台异步任务填充',
 		});
 	});
 
 	// 查询完整的生成请求对象（包含关联数据）
 	return getRequestById(requestId);
+}
+
+/**
+ * 异步处理：生成提示词变体并加入队列
+ *
+ * 业务流程:
+ * 1. 调用 LLM 生成 4 个提示词变体
+ * 2. 更新数据库中的 imagePrompt 字段
+ * 3. 将 4 个 ImageJob 加入 BullMQ 队列
+ * 4. 降级策略：LLM 失败时使用原始提示词
+ *
+ * @param requestId 生成请求 ID
+ * @param originalPrompt 用户原始输入的提示词
+ * @param userId 用户 ID
+ */
+export async function processPromptAndEnqueueJobs(
+	requestId: string,
+	originalPrompt: string,
+	userId: string,
+): Promise<void> {
+	try {
+		logger.info({
+			msg: '🎨 开始异步处理提示词生成和任务入队',
+			requestId,
+			originalPrompt,
+		});
+
+		// 步骤 1: 调用 LLM 生成 4 个提示词变体
+		let promptVariants: string[];
+		try {
+			const { processUserPromptForImageGeneration } = await import(
+				'./prompt-optimizer.service.js'
+			);
+			const result = await processUserPromptForImageGeneration(originalPrompt);
+			promptVariants = result.prompts;
+
+			logger.info({
+				msg: '✅ LLM 提示词生成成功',
+				requestId,
+				promptCount: promptVariants.length,
+			});
+		} catch (error) {
+			// 降级策略：LLM 失败时使用原始提示词
+			logger.warn({
+				msg: '⚠️ LLM 提示词生成失败，降级使用原始提示词',
+				requestId,
+				error,
+			});
+			promptVariants = [originalPrompt, originalPrompt, originalPrompt, originalPrompt];
+		}
+
+		// 步骤 2: 查询该请求的所有图片记录
+		const images = await generatedImageRepository.findByRequestId(requestId);
+		if (images.length !== 4) {
+			throw new Error(`期望 4 张图片记录，实际找到 ${images.length} 张`);
+		}
+
+		// 步骤 3: 更新每张图片的 imagePrompt 字段
+		await Promise.all(
+			images.map((image, index) =>
+				generatedImageRepository.update(image.id, {
+					imagePrompt: promptVariants[index],
+				}),
+			),
+		);
+
+		logger.info({
+			msg: '✅ 已更新所有图片的 imagePrompt',
+			requestId,
+			imageIds: images.map((img) => img.id).join(','),
+		});
+
+		// 步骤 4: 查询每张图片关联的 Job，并加入队列
+		const imageJobs = await Promise.all(
+			images.map(async (image, index) => {
+				// 查询该图片关联的 Job
+				const job = await imageJobRepository.findByImageId(image.id);
+				if (!job) {
+					throw new Error(`Image ${image.id} 没有关联的 Job`);
+				}
+
+				// 加入 BullMQ 队列
+				return imageQueue.add(`image-${image.id}`, {
+					jobId: job.id,
+					imageId: image.id,
+					prompt: promptVariants[index],
+					requestId,
+					userId,
+				});
+			}),
+		);
+
+		logger.info({
+			msg: '✅ 所有图片任务已加入队列',
+			requestId,
+			jobCount: imageJobs.length,
+			queueJobIds: imageJobs.map((j) => j.id).join(','),
+		});
+	} catch (error) {
+		logger.error({
+			msg: '❌ 异步处理失败',
+			requestId,
+			error,
+		});
+
+		// 错误处理：更新请求状态为失败
+		try {
+			await generationRequestRepository.update(requestId, {
+				status: 'FAILED',
+				phase: 'IMAGE_GENERATION',
+			});
+		} catch (updateError) {
+			logger.error({
+				msg: '❌ 更新失败状态时出错',
+				requestId,
+				error: updateError,
+			});
+		}
+	}
 }
 
 /**
