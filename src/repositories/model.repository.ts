@@ -120,24 +120,60 @@ export class ModelRepository {
 	}
 
 	/**
-	 * 根据用户外部 ID 查询模型列表
+	 * 根据用户外部 ID 查询模型列表（支持筛选和排序）
 	 */
 	async findByUserId(
 		externalUserId: string,
 		options: {
+			visibility?: 'PUBLIC' | 'PRIVATE';
+			sortBy?: 'latest' | 'name' | 'popular';
 			limit?: number;
 			offset?: number;
 		} = {},
 	): Promise<Model[]> {
-		const { limit = 20, offset = 0 } = options;
+		const { visibility, sortBy = 'latest', limit = 20, offset = 0 } = options;
 
+		// 构建基础查询条件
+		const conditions = visibility
+			? and(eq(models.externalUserId, externalUserId), eq(models.visibility, visibility))
+			: eq(models.externalUserId, externalUserId);
+
+		// 根据排序方式选择排序字段
+		let orderBy;
+		if (sortBy === 'latest') {
+			orderBy = desc(models.createdAt);
+		} else if (sortBy === 'name') {
+			orderBy = models.name;
+		} else if (sortBy === 'popular') {
+			orderBy = desc(models.viewCount);
+		} else {
+			orderBy = desc(models.createdAt);
+		}
+
+		// 执行查询
 		return db
 			.select()
 			.from(models)
-			.where(eq(models.externalUserId, externalUserId))
-			.orderBy(desc(models.createdAt))
+			.where(conditions)
+			.orderBy(orderBy)
 			.limit(limit)
 			.offset(offset);
+	}
+
+	/**
+	 * 统计用户模型数量（支持按可见性筛选）
+	 */
+	async countByUserId(externalUserId: string, options: { visibility?: 'PUBLIC' | 'PRIVATE' } = {}): Promise<number> {
+		const { visibility } = options;
+
+		const conditions = visibility
+			? and(eq(models.externalUserId, externalUserId), eq(models.visibility, visibility))
+			: eq(models.externalUserId, externalUserId);
+
+		const query = db.select({ count: sql<number>`count(*)` }).from(models).where(conditions);
+
+		const [result] = await query;
+		return result.count;
 	}
 
 	/**

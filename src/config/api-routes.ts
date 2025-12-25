@@ -31,6 +31,8 @@ export const API_ROUTES = {
 	 */
 	protected: [
 		'/api/tasks', // 任务管理（包括所有子路径）
+		'/api/users', // 用户相关接口（包括所有子路径）
+		'/api/models', // 模型管理（包括所有子路径）
 		'/api/admin', // 管理接口（包括所有子路径）
 	],
 
