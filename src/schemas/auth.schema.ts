@@ -1,21 +1,9 @@
 /**
- * Auth（认证）相关的 Schema 定义
+ * Auth（认证）相关的 Schema 定义 (TypeBox 版本)
  */
 
-import { createSuccessResponseSchema, emailSchema } from './common.schema';
-
-/**
- * 用户对象 Schema
- */
-export const userSchema = {
-	type: 'object',
-	properties: {
-		id: { type: 'string', description: '用户 ID' },
-		email: emailSchema,
-		name: { type: 'string', description: '用户名' },
-		avatar: { type: ['string', 'null'], description: '头像 URL' },
-	},
-} as const;
+import { Type } from '@sinclair/typebox';
+import { JSendFail, JSendSuccess } from './common';
 
 /**
  * POST /api/auth/send-code - 发送验证码
@@ -24,23 +12,22 @@ export const sendCodeSchema = {
 	tags: ['认证'],
 	summary: '发送邮箱验证码',
 	description: '向指定邮箱发送验证码，有效期 10 分钟',
-	body: {
-		type: 'object',
-		required: ['email', 'type'],
-		properties: {
-			email: emailSchema,
-			type: {
-				type: 'string',
-				enum: ['login', 'register', 'modify_password'],
-				description: '验证码类型',
-			},
-		},
-	},
-	response: {
-		200: createSuccessResponseSchema({
-			type: 'null',
-			description: '发送成功',
+	body: Type.Object({
+		email: Type.String({
+			format: 'email',
+			description: '邮箱地址',
 		}),
+		type: Type.Union(
+			[Type.Literal('login'), Type.Literal('register'), Type.Literal('modify_password')],
+			{
+				description: '验证码类型：login(登录) | register(注册) | modify_password(修改密码)',
+			},
+		),
+	}),
+	response: {
+		200: JSendSuccess(Type.Null()),
+		400: JSendFail, // 参数错误
+		500: JSendFail, // 发送失败
 	},
 } as const;
 
@@ -51,22 +38,21 @@ export const registerSchema = {
 	tags: ['认证'],
 	summary: '用户注册',
 	description: '使用邮箱和验证码注册新用户',
-	body: {
-		type: 'object',
-		required: ['email', 'code'],
-		properties: {
-			email: emailSchema,
-			code: {
-				type: 'string',
-				description: '验证码',
-			},
-		},
-	},
-	response: {
-		200: createSuccessResponseSchema({
-			type: 'null',
-			description: '注册成功',
+	body: Type.Object({
+		email: Type.String({
+			format: 'email',
+			description: '邮箱地址',
 		}),
+		code: Type.String({
+			minLength: 4,
+			maxLength: 6,
+			description: '验证码（4-6位）',
+		}),
+	}),
+	response: {
+		200: JSendSuccess(Type.Null()),
+		400: JSendFail, // 验证码错误或已过期
+		500: JSendFail, // 注册失败
 	},
 } as const;
 
@@ -77,40 +63,28 @@ export const loginSchema = {
 	tags: ['认证'],
 	summary: '用户登录',
 	description: '使用邮箱和验证码登录，成功后返回 Bearer Token',
-	body: {
-		type: 'object',
-		required: ['email', 'code'],
-		properties: {
-			email: emailSchema,
-			code: {
-				type: 'string',
-				description: '验证码',
-			},
-		},
-	},
-	response: {
-		200: createSuccessResponseSchema({
-			type: 'object',
-			properties: {
-				token: { type: 'string', description: 'Bearer Token' },
-			},
-			required: ['token'],
+	body: Type.Object({
+		email: Type.String({
+			format: 'email',
+			description: '邮箱地址',
 		}),
-	},
-} as const;
-
-/**
- * 外部用户服务返回的用户对象 Schema
- */
-export const externalUserSchema = {
-	type: 'object',
-	properties: {
-		id: { type: 'string', description: '用户 ID' },
-		email: emailSchema,
-		userName: { type: 'string', description: '用户名' },
-		nickName: { type: 'string', description: '昵称' },
-		avatar: { type: ['string', 'null'], description: '头像 URL' },
-		gender: { type: 'string', description: '性别' },
+		code: Type.String({
+			minLength: 4,
+			maxLength: 6,
+			description: '验证码（4-6位）',
+		}),
+	}),
+	response: {
+		200: JSendSuccess(
+			Type.Object({
+				token: Type.String({
+					description: 'Bearer Token（用于后续请求的身份验证）',
+				}),
+			}),
+		),
+		400: JSendFail, // 验证码错误或已过期
+		401: JSendFail, // 登录失败
+		500: JSendFail, // 服务器错误
 	},
 } as const;
 
@@ -122,21 +96,35 @@ export const getMeSchema = {
 	summary: '获取当前登录用户',
 	description: '通过 Bearer Token 获取当前登录用户信息',
 	response: {
-		200: createSuccessResponseSchema({
-			type: 'object',
-			properties: {
-				status: {
-					type: 'string',
-					enum: ['authenticated', 'unauthenticated', 'error'],
-					description: '认证状态',
-				},
-				user: {
-					oneOf: [externalUserSchema, { type: 'null' }],
-					description: '用户信息（未登录时为 null）',
-				},
-			},
-			required: ['status', 'user'],
-		}),
+		200: JSendSuccess(
+			Type.Object({
+				status: Type.Union(
+					[Type.Literal('authenticated'), Type.Literal('unauthenticated'), Type.Literal('error')],
+					{
+						description: '认证状态：authenticated(已认证) | unauthenticated(未认证) | error(错误)',
+					},
+				),
+				user: Type.Union(
+					[
+						Type.Object({
+							id: Type.String({ description: '用户 ID' }),
+							email: Type.String({ format: 'email', description: '邮箱' }),
+							userName: Type.String({ description: '用户名' }),
+							nickName: Type.String({ description: '昵称' }),
+							avatar: Type.Union([Type.String({ format: 'uri' }), Type.Null()], {
+								description: '头像 URL',
+							}),
+							gender: Type.String({ description: '性别' }),
+						}),
+						Type.Null(),
+					],
+					{
+						description: '用户信息（未登录时为 null）',
+					},
+				),
+			}),
+		),
+		500: JSendFail, // 服务器错误
 	},
 } as const;
 
@@ -148,9 +136,7 @@ export const logoutSchema = {
 	summary: '登出',
 	description: '注销当前登录会话',
 	response: {
-		200: createSuccessResponseSchema({
-			type: 'null',
-			description: '登出成功',
-		}),
+		200: JSendSuccess(Type.Null()),
+		500: JSendFail, // 服务器错误（即使出错也会返回成功，本地清除状态即可）
 	},
 } as const;
