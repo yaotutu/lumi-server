@@ -110,10 +110,7 @@ export async function taskRoutes(fastify: FastifyInstance) {
 			}
 
 			// ✅ 创建生成请求（快速返回，不等待 LLM 和队列）
-			const generationRequest = await GenerationRequestService.createRequest(
-				userId,
-				prompt.trim(),
-			);
+			const generationRequest = await GenerationRequestService.createRequest(userId, prompt.trim());
 
 			// ✅ 使用 setImmediate 触发后台异步处理（生成提示词 + 加入队列）
 			setImmediate(() => {

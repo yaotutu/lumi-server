@@ -1,27 +1,16 @@
 /**
  * Users 路由 Schema (TypeBox 版本)
  * 对应 /api/users 相关端点（代理外部用户服务）
+ *
+ * 注意：
+ * - GET /api/users/info 已废弃，使用 GET /api/auth/me 替代
+ * - POST /api/users/logout 已废弃，使用 POST /api/auth/logout 替代
  */
 
 import { Type } from '@sinclair/typebox';
 import { IdParam, JSendFail, JSendSuccess } from '../common';
 import { UserEntity } from '../entities';
 import { ModelEntity } from '../entities/model.entity.schema';
-
-/**
- * GET /api/users/info - 获取当前用户信息
- */
-export const getUserInfoSchema = {
-	tags: ['用户'],
-	summary: '获取当前用户信息',
-	description: '获取当前登录用户的详细信息（需要 Bearer Token）',
-	response: {
-		200: JSendSuccess(UserEntity),
-		400: JSendFail, // 用户服务返回的错误
-		401: JSendFail, // 未认证
-		500: JSendFail, // 服务器内部错误
-	},
-} as const;
 
 /**
  * GET /api/users/:id - 获取指定用户信息
@@ -66,25 +55,6 @@ export const updateUserSchema = {
 				code: Type.String(),
 			}),
 		}),
-	},
-} as const;
-
-/**
- * POST /api/users/logout - 用户登出
- */
-export const userLogoutSchema = {
-	tags: ['用户'],
-	summary: '用户登出',
-	description: '注销当前登录会话（需要 Bearer Token）',
-	response: {
-		200: JSendSuccess(
-			Type.Object({
-				message: Type.String({ description: '提示信息' }),
-			}),
-		),
-		400: JSendFail, // 用户服务返回的错误
-		401: JSendFail, // 未认证
-		500: JSendFail, // 服务器内部错误
 	},
 } as const;
 

@@ -155,9 +155,7 @@ export async function processPromptAndEnqueueJobs(
 		// 步骤 1: 调用 LLM 生成 4 个提示词变体
 		let promptVariants: string[];
 		try {
-			const { processUserPromptForImageGeneration } = await import(
-				'./prompt-optimizer.service.js'
-			);
+			const { processUserPromptForImageGeneration } = await import('./prompt-optimizer.service.js');
 			const result = await processUserPromptForImageGeneration(originalPrompt);
 			promptVariants = result.prompts;
 

@@ -151,19 +151,16 @@ export class ModelRepository {
 		}
 
 		// 执行查询
-		return db
-			.select()
-			.from(models)
-			.where(conditions)
-			.orderBy(orderBy)
-			.limit(limit)
-			.offset(offset);
+		return db.select().from(models).where(conditions).orderBy(orderBy).limit(limit).offset(offset);
 	}
 
 	/**
 	 * 统计用户模型数量（支持按可见性筛选）
 	 */
-	async countByUserId(externalUserId: string, options: { visibility?: 'PUBLIC' | 'PRIVATE' } = {}): Promise<number> {
+	async countByUserId(
+		externalUserId: string,
+		options: { visibility?: 'PUBLIC' | 'PRIVATE' } = {},
+	): Promise<number> {
 		const { visibility } = options;
 
 		const conditions = visibility

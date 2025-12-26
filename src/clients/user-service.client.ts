@@ -265,6 +265,130 @@ export class UserServiceClient {
 			token,
 		);
 	}
+
+	// ============================================
+	// 获取指定用户信息 API
+	// ============================================
+
+	/**
+	 * 获取指定用户信息
+	 *
+	 * @param userId 用户ID
+	 * @param token 认证 Token（必须包含 "Bearer " 前缀）
+	 * @returns 成功时返回用户信息
+	 *
+	 * @example
+	 * ```typescript
+	 * const response = await userServiceClient.getUserById('123', token);
+	 * if (response.code === 200) {
+	 *   const user = response.data;
+	 *   console.log(`用户名: ${user.user_name}, 昵称: ${user.nick_name}`);
+	 * }
+	 * ```
+	 */
+	async getUserById(
+		userId: string,
+		token: string,
+	): Promise<{ code: number; msg: string; data?: UserInfoData }> {
+		return this.request<UserInfoData>(
+			`/api/v1.0/${userId}`,
+			{
+				method: 'GET',
+			},
+			true, // 需要认证
+			token,
+		);
+	}
+
+	// ============================================
+	// 更新用户信息 API
+	// ============================================
+
+	/**
+	 * 更新用户信息
+	 *
+	 * @param userId 用户ID
+	 * @param updateData 更新数据（昵称、头像、性别）
+	 * @param token 认证 Token（必须包含 "Bearer " 前缀）
+	 * @returns 成功或失败结果
+	 *
+	 * @example
+	 * ```typescript
+	 * await userServiceClient.updateUser('123', {
+	 *   nick_name: '新昵称',
+	 *   avatar: 'base64...',
+	 *   gender: '男'
+	 * }, token);
+	 * ```
+	 */
+	async updateUser(
+		userId: string,
+		updateData: {
+			nick_name?: string;
+			avatar?: string;
+			gender?: string;
+		},
+		token: string,
+	): Promise<{ code: number; msg: string }> {
+		return this.request<undefined>(
+			'/api/v1.0/update',
+			{
+				method: 'POST',
+				body: JSON.stringify({
+					id: userId,
+					...updateData,
+				}),
+			},
+			true, // 需要认证
+			token,
+		);
+	}
+
+	// ============================================
+	// 修改密码 API
+	// ============================================
+
+	/**
+	 * 修改密码
+	 *
+	 * @param userId 用户ID
+	 * @param passwordData 密码数据
+	 * @param token 认证 Token（必须包含 "Bearer " 前缀）
+	 * @returns 成功或失败结果
+	 *
+	 * @example
+	 * ```typescript
+	 * await userServiceClient.modifyPassword('123', {
+	 *   old_password: '旧密码',  // 可选
+	 *   new_password: '新密码',
+	 *   repassword: '新密码',
+	 *   random_code: 'ABC123'
+	 * }, token);
+	 * ```
+	 */
+	async modifyPassword(
+		userId: string,
+		passwordData: {
+			old_password?: string;
+			new_password: string;
+			repassword: string;
+			random_code: string;
+		},
+		token: string,
+	): Promise<{ code: number; msg: string }> {
+		return this.request<undefined>(
+			'/api/v1.0/modify_password',
+			{
+				method: 'POST',
+				body: JSON.stringify({
+					id: userId,
+					...passwordData,
+				}),
+			},
+			true, // 需要认证
+			token,
+		);
+	}
 }
 
 // ============================================
