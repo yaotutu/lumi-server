@@ -108,13 +108,15 @@ export const getMeSchema = {
 					[
 						Type.Object({
 							id: Type.String({ description: '用户 ID' }),
-							email: Type.String({ format: 'email', description: '邮箱' }),
+							email: Type.Optional(Type.String({ format: 'email', description: '邮箱' })),
 							userName: Type.String({ description: '用户名' }),
 							nickName: Type.String({ description: '昵称' }),
-							avatar: Type.Union([Type.String({ format: 'uri' }), Type.Null()], {
-								description: '头像 URL',
-							}),
-							gender: Type.String({ description: '性别' }),
+							avatar: Type.Optional(
+								Type.Union([Type.String(), Type.Null()], {
+									description: '头像 URL（可选）',
+								}),
+							),
+							gender: Type.Optional(Type.String({ description: '性别（可选）' })),
 						}),
 						Type.Null(),
 					],
@@ -124,7 +126,7 @@ export const getMeSchema = {
 				),
 			}),
 		),
-		500: JSendFail, // 服务器错误
+		// 注意：此接口即使发生错误也返回 200，通过 data.status 字段区分状态
 	},
 } as const;
 

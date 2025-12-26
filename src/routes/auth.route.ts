@@ -56,10 +56,12 @@ export async function authRoutes(fastify: FastifyInstance) {
 				return reply.send(success(null));
 			}
 
-			return reply.send(fail(response.msg || '发送验证码失败'));
+			// 发送验证码失败，返回 400 状态码
+			return reply.status(400).send(fail(response.msg || '发送验证码失败'));
 		} catch (error) {
 			logger.error({ msg: '发送验证码失败', error });
-			return reply.send(fail('发送验证码失败'));
+			// 服务器内部错误，返回 500 状态码
+			return reply.status(500).send(fail('发送验证码失败'));
 		}
 	});
 
@@ -81,10 +83,12 @@ export async function authRoutes(fastify: FastifyInstance) {
 				return reply.send(success(null));
 			}
 
-			return reply.send(fail(response.msg || '注册失败'));
+			// 注册失败，返回 400 状态码
+			return reply.status(400).send(fail(response.msg || '注册失败'));
 		} catch (error) {
 			logger.error({ msg: '用户注册失败', error });
-			return reply.send(fail('注册失败'));
+			// 服务器内部错误，返回 500 状态码
+			return reply.status(500).send(fail('注册失败'));
 		}
 	});
 
@@ -110,10 +114,12 @@ export async function authRoutes(fastify: FastifyInstance) {
 				);
 			}
 
-			return reply.send(fail(response.msg || '登录失败'));
+			// 登录失败，返回 401 状态码
+			return reply.status(401).send(fail(response.msg || '登录失败'));
 		} catch (error) {
 			logger.error({ msg: '用户登录失败', error });
-			return reply.send(fail('登录失败'));
+			// 服务器内部错误，返回 500 状态码
+			return reply.status(500).send(fail('登录失败'));
 		}
 	});
 
@@ -138,17 +144,28 @@ export async function authRoutes(fastify: FastifyInstance) {
 			const response = await userClient.getUserInfo(authHeader);
 
 			if (response.code === 200 && response.data) {
+				// 构建 user 对象，只包含必需字段
+				const userData: Record<string, any> = {
+					id: response.data.user_id,
+					userName: response.data.user_name,
+					nickName: response.data.nick_name,
+				};
+
+				// 添加可选字段（仅在存在时）
+				if (response.data.email) {
+					userData.email = response.data.email;
+				}
+				if (response.data.avatar !== undefined) {
+					userData.avatar = response.data.avatar || null;
+				}
+				if (response.data.gender) {
+					userData.gender = response.data.gender;
+				}
+
 				return reply.send(
 					success({
 						status: 'authenticated',
-						user: {
-							id: response.data.user_id,
-							email: response.data.email,
-							userName: response.data.user_name,
-							nickName: response.data.nick_name,
-							avatar: response.data.avatar,
-							gender: response.data.gender,
-						},
+						user: userData,
 					}),
 				);
 			}
@@ -161,6 +178,8 @@ export async function authRoutes(fastify: FastifyInstance) {
 			);
 		} catch (error) {
 			logger.error({ msg: '获取用户信息失败', error });
+			// 注意：即使出错，也返回 200 状态码 + success 格式
+			// 通过 status: 'error' 字段告知前端发生了错误
 			return reply.send(
 				success({
 					status: 'error',
