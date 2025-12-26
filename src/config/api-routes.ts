@@ -46,12 +46,14 @@ export const API_ROUTES = {
 	protectedByMethod: [
 		{
 			path: '/api/gallery/models/:id/interactions', // 使用 :id 代替正则
-			methods: ['POST', 'PUT', 'DELETE'], // 点赞/收藏操作
+			methods: ['POST', 'PUT', 'DELETE'], // 仅 POST/PUT/DELETE 需要认证（点赞/收藏操作）
+			// GET 方法不需要认证，允许已登录和未登录用户访问
 		},
 		{
 			path: '/api/gallery/models/:id/download', // 模型下载
 			methods: ['GET', 'POST'],
 		},
+		// 🔥 移除 batch-interactions 的保护配置，改为可选认证（支持未登录访问）
 	] as ProtectedMethodRule[],
 
 	/**

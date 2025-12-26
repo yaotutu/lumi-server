@@ -6,6 +6,7 @@
 import { Type } from '@sinclair/typebox';
 import { IdParam, JSendFail, JSendSuccess } from '../common';
 import { UserEntity } from '../entities';
+import { ModelEntity } from '../entities/model.entity.schema';
 
 /**
  * GET /api/users/info - 获取当前用户信息
@@ -114,5 +115,23 @@ export const modifyPasswordSchema = {
 				code: Type.String(),
 			}),
 		}),
+	},
+} as const;
+
+/**
+ * GET /api/users/favorites - 获取用户收藏的模型列表
+ */
+export const getUserFavoritesSchema = {
+	tags: ['用户'],
+	summary: '获取用户收藏的模型列表',
+	description: '获取当前登录用户收藏的所有 3D 模型（需要 Bearer Token）',
+	querystring: Type.Object({
+		limit: Type.Optional(Type.String({ description: '每页数量（默认 20）' })),
+		offset: Type.Optional(Type.String({ description: '偏移量（默认 0）' })),
+	}),
+	response: {
+		200: JSendSuccess(Type.Array(ModelEntity)),
+		401: JSendFail, // 未认证
+		500: JSendFail, // 服务器内部错误
 	},
 } as const;

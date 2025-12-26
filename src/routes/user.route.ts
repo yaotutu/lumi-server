@@ -1,9 +1,12 @@
 /**
  * User Routes - 用户管理路由
  *
- * 职责：代理外部用户服务的接口（需要 Bearer Token）
+ * 职责：
+ * 1. 代理外部用户服务的接口（需要 Bearer Token）
+ * 2. 提供用户收藏功能接口
  *
  * 端点:
+ * - GET  /api/users/favorites - 获取用户收藏的模型列表
  * - GET  /api/users/info - 获取当前用户信息
  * - GET  /api/users/:id - 获取指定用户信息
  * - POST /api/users/update - 更新用户信息
@@ -18,9 +21,11 @@ import {
 	modifyPasswordSchema,
 	updateUserSchema,
 	userLogoutSchema,
+	getUserFavoritesSchema,
 } from '@/schemas/routes/users.schema';
 import { logger } from '@/utils/logger';
 import { fail, success } from '@/utils/response';
+import * as InteractionService from '@/services/interaction.service';
 
 const USER_SERVICE_BASE_URL = process.env.USER_SERVICE_URL || 'http://user.ai3d.top';
 
@@ -64,6 +69,43 @@ async function proxyToUserService(
  * 注册用户管理路由
  */
 export async function userRoutes(fastify: FastifyInstance) {
+	/**
+	 * GET /api/users/favorites
+	 * 获取用户收藏的模型列表
+	 */
+	fastify.get('/api/users/favorites', { schema: getUserFavoritesSchema }, async (request, reply) => {
+		try {
+			// 从 request.user 获取用户 ID（由认证中间件注入）
+			const userId = request.user?.id;
+			if (!userId) {
+				return reply.code(401).send(fail('请先登录', 'UNAUTHORIZED'));
+			}
+
+			// 解析查询参数
+			const query = request.query as {
+				limit?: string;
+				offset?: string;
+			};
+
+			const limit = query.limit ? Number.parseInt(query.limit, 10) : undefined;
+			const offset = query.offset ? Number.parseInt(query.offset, 10) : undefined;
+
+			// 调用 Interaction Service 获取收藏的模型列表
+			const models = await InteractionService.getUserFavoritedModels(userId, { limit, offset });
+
+			logger.info({
+				msg: '✅ 获取用户收藏列表成功',
+				userId,
+				modelCount: models.length,
+			});
+
+			return reply.send(success(models));
+		} catch (error) {
+			logger.error({ msg: '获取用户收藏列表失败', error });
+			return reply.code(500).send(fail('获取用户收藏列表失败', 'INTERNAL_ERROR'));
+		}
+	});
+
 	/**
 	 * GET /api/users/info
 	 * 获取当前登录用户信息

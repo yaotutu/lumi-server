@@ -39,17 +39,40 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
 		return;
 	}
 
-	// 检查是否是需要认证的 API（根据路径和方法）
+	// 从 Header 获取 Bearer Token（无论是否需要认证，都尝试解析）
+	const authHeader = request.headers.authorization;
+
+	// 如果有 Token，尝试验证并填充 request.user（可选认证）
+	if (authHeader && authHeader.startsWith('Bearer ')) {
+		const externalUser = await externalUserService.verifyTokenAndGetUser(authHeader);
+
+		if (externalUser) {
+			// ✅ Token 有效，填充 request.user
+			request.user = {
+				id: externalUser.user_id,
+				email: externalUser.email,
+				userName: externalUser.user_name,
+			};
+
+			logger.debug({
+				msg: '✅ 认证通过（可选认证）',
+				pathname,
+				method,
+				externalUserId: externalUser.user_id,
+			});
+		}
+	}
+
+	// 检查是否是必须认证的 API（根据路径和方法）
 	if (!isProtectedRoute(pathname, method)) {
+		// 不需要认证，直接放行（request.user 可能有值，也可能为 undefined）
 		return;
 	}
 
-	// 从 Header 获取 Bearer Token
-	const authHeader = request.headers.authorization;
-
-	if (!authHeader || !authHeader.startsWith('Bearer ')) {
+	// 需要认证但未提供 Token，或 Token 无效
+	if (!request.user) {
 		logger.warn({
-			msg: '未提供 Token',
+			msg: '未提供 Token 或 Token 无效',
 			pathname,
 			method,
 		});
@@ -63,37 +86,11 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
 		});
 	}
 
-	// 直接使用完整的 Authorization header（包含 "Bearer " 前缀）
-	// 调用外部用户服务验证 Token 并获取用户信息
-	const externalUser = await externalUserService.verifyTokenAndGetUser(authHeader);
-
-	if (!externalUser) {
-		logger.warn({
-			msg: 'Token 验证失败',
-			pathname,
-			method,
-		});
-
-		return reply.status(401).send({
-			status: 'fail',
-			data: {
-				message: 'Token 无效或已过期',
-				code: 'UNAUTHENTICATED',
-			},
-		});
-	}
-
-	// ✅ 安全：使用 request 对象属性传递用户信息（客户端无法伪造）
-	request.user = {
-		id: externalUser.user_id,
-		email: externalUser.email,
-		userName: externalUser.user_name,
-	};
-
+	// ✅ 需要认证且已认证通过
 	logger.debug({
-		msg: '✅ 认证通过',
+		msg: '✅ 认证通过（强制认证）',
 		pathname,
 		method,
-		externalUserId: externalUser.user_id,
+		userId: request.user.id,
 	});
 }

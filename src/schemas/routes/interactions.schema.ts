@@ -54,6 +54,18 @@ export const createInteractionSchema = {
 } as const;
 
 /**
+ * 单个模型的交互状态对象
+ */
+const InteractionStatus = Type.Object({
+	isLiked: Type.Boolean({
+		description: '是否已点赞',
+	}),
+	isFavorited: Type.Boolean({
+		description: '是否已收藏',
+	}),
+});
+
+/**
  * POST /api/gallery/models/batch-interactions - 批量获取交互状态
  */
 export const batchInteractionsSchema = {
@@ -73,9 +85,8 @@ export const batchInteractionsSchema = {
 				isAuthenticated: Type.Boolean({
 					description: '用户是否已登录',
 				}),
-				interactions: Type.Record(Type.String(), Type.Array(Type.String()), {
-					description:
-						'交互状态映射 { [modelId]: ["LIKE"] | ["FAVORITE"] | ["LIKE", "FAVORITE"] | [] }',
+				interactions: Type.Record(Type.String(), InteractionStatus, {
+					description: '交互状态映射 { [modelId]: { isLiked: boolean, isFavorited: boolean } }',
 				}),
 			}),
 		),
