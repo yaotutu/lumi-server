@@ -199,24 +199,12 @@ export class ModelRepository {
 
 		// COALESCE 确保即使没有记录，也返回 0 而不是 null
 		// 需要显式转换为数字类型，因为 SQL SUM 可能返回字符串
-		const stats = {
+		return {
 			totalLikes: Number(result.totalLikes) || 0,
 			totalFavorites: Number(result.totalFavorites) || 0,
 			totalViews: Number(result.totalViews) || 0,
 			totalDownloads: Number(result.totalDownloads) || 0,
 		};
-
-		// 临时调试日志：检查类型转换
-		console.log('🔍 [DEBUG] SQL结果:', {
-			raw: result,
-			converted: stats,
-			types: {
-				totalLikes: typeof stats.totalLikes,
-				totalFavorites: typeof stats.totalFavorites,
-			}
-		});
-
-		return stats;
 	}
 
 	/**

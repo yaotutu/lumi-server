@@ -168,7 +168,6 @@ export async function authRoutes(fastify: FastifyInstance) {
 				let stats = null;
 				try {
 					stats = await UserStatsService.getUserStats(response.data.user_id);
-					logger.info({ msg: '✅ 成功获取用户统计数据', userId: response.data.user_id, stats });
 				} catch (statsError) {
 					// 统计数据查询失败时，记录警告日志，但不影响用户基本信息的返回
 					logger.warn({
@@ -196,7 +195,6 @@ export async function authRoutes(fastify: FastifyInstance) {
 				// 将统计数据添加到用户对象中
 				userData.stats = stats;
 
-				logger.info({ msg: '📦 准备返回的用户数据', userData });
 
 				return reply.send(
 					success({
