@@ -174,6 +174,52 @@ export class ModelRepository {
 	}
 
 	/**
+	 * 获取用户模型的聚合统计数据
+	 * 统计用户所有公开模型的点赞、收藏、浏览、下载的总和
+	 * @param externalUserId 用户外部 ID
+	 * @returns 聚合统计数据对象（已转换为数字类型）
+	 */
+	async getUserModelsAggregateStats(externalUserId: string): Promise<{
+		totalLikes: number;
+		totalFavorites: number;
+		totalViews: number;
+		totalDownloads: number;
+	}> {
+		// 使用 SQL 聚合函数统计用户所有公开模型的总数据
+		// 只统计公开模型，私有模型不计入统计
+		const [result] = await db
+			.select({
+				totalLikes: sql<number>`COALESCE(SUM(${models.likeCount}), 0)`,
+				totalFavorites: sql<number>`COALESCE(SUM(${models.favoriteCount}), 0)`,
+				totalViews: sql<number>`COALESCE(SUM(${models.viewCount}), 0)`,
+				totalDownloads: sql<number>`COALESCE(SUM(${models.downloadCount}), 0)`,
+			})
+			.from(models)
+			.where(and(eq(models.externalUserId, externalUserId), eq(models.visibility, 'PUBLIC')));
+
+		// COALESCE 确保即使没有记录，也返回 0 而不是 null
+		// 需要显式转换为数字类型，因为 SQL SUM 可能返回字符串
+		const stats = {
+			totalLikes: Number(result.totalLikes) || 0,
+			totalFavorites: Number(result.totalFavorites) || 0,
+			totalViews: Number(result.totalViews) || 0,
+			totalDownloads: Number(result.totalDownloads) || 0,
+		};
+
+		// 临时调试日志：检查类型转换
+		console.log('🔍 [DEBUG] SQL结果:', {
+			raw: result,
+			converted: stats,
+			types: {
+				totalLikes: typeof stats.totalLikes,
+				totalFavorites: typeof stats.totalFavorites,
+			}
+		});
+
+		return stats;
+	}
+
+	/**
 	 * 查询公开模型列表（支持筛选和排序）
 	 * URL 已转换为代理 URL，前端可直接使用
 	 */

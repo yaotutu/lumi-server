@@ -3,6 +3,7 @@
  */
 
 import { Type } from '@sinclair/typebox';
+import { UserStatsEntity } from './entities/user.entity.schema';
 import { JSendFail, JSendSuccess } from './common';
 
 /**
@@ -94,7 +95,7 @@ export const loginSchema = {
 export const getMeSchema = {
 	tags: ['认证'],
 	summary: '获取当前登录用户',
-	description: '通过 Bearer Token 获取当前登录用户信息',
+	description: '通过 Bearer Token 获取当前登录用户信息（包含统计数据）',
 	response: {
 		200: JSendSuccess(
 			Type.Object({
@@ -117,6 +118,7 @@ export const getMeSchema = {
 								}),
 							),
 							gender: Type.Optional(Type.String({ description: '性别（可选）' })),
+							stats: Type.Optional(UserStatsEntity, { description: '用户统计数据（可选）' }),
 						}),
 						Type.Null(),
 					],

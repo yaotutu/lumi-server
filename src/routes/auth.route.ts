@@ -25,6 +25,7 @@ import {
 	registerSchema,
 	sendCodeSchema,
 } from '@/schemas/auth.schema';
+import { UserStatsService } from '@/services';
 import { logger } from '@/utils/logger';
 import { fail, success } from '@/utils/response';
 
@@ -125,7 +126,7 @@ export async function authRoutes(fastify: FastifyInstance) {
 
 	/**
 	 * GET /api/auth/me
-	 * 获取当前用户信息
+	 * 获取当前用户信息（包含统计数据）
 	 */
 	fastify.get('/api/auth/me', { schema: getMeSchema }, async (request, reply) => {
 		try {
@@ -161,6 +162,41 @@ export async function authRoutes(fastify: FastifyInstance) {
 				if (response.data.gender) {
 					userData.gender = response.data.gender;
 				}
+
+				// 获取用户统计数据
+				// 如果统计数据查询失败，使用默认值（全部为 0）
+				let stats = null;
+				try {
+					stats = await UserStatsService.getUserStats(response.data.user_id);
+					logger.info({ msg: '✅ 成功获取用户统计数据', userId: response.data.user_id, stats });
+				} catch (statsError) {
+					// 统计数据查询失败时，记录警告日志，但不影响用户基本信息的返回
+					logger.warn({
+						msg: '获取用户统计数据失败，使用默认值',
+						userId: response.data.user_id,
+						error: statsError,
+					});
+					// 使用默认统计数据（全部为 0）
+					stats = {
+						totalModels: 0,
+						publicModels: 0,
+						privateModels: 0,
+						totalLikes: 0,
+						totalFavorites: 0,
+						totalViews: 0,
+						totalDownloads: 0,
+						likedModelsCount: 0,
+						favoritedModelsCount: 0,
+						totalRequests: 0,
+						completedRequests: 0,
+						failedRequests: 0,
+					};
+				}
+
+				// 将统计数据添加到用户对象中
+				userData.stats = stats;
+
+				logger.info({ msg: '📦 准备返回的用户数据', userData });
 
 				return reply.send(
 					success({
