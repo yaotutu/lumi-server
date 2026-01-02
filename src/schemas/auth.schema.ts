@@ -3,8 +3,8 @@
  */
 
 import { Type } from '@sinclair/typebox';
-import { UserStatsEntity } from './entities/user.entity.schema';
 import { JSendFail, JSendSuccess } from './common';
+import { UserStatsEntity } from './entities/user.entity.schema';
 
 /**
  * POST /api/auth/send-code - 发送验证码

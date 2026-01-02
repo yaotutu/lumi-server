@@ -195,7 +195,6 @@ export async function authRoutes(fastify: FastifyInstance) {
 				// 将统计数据添加到用户对象中
 				userData.stats = stats;
 
-
 				return reply.send(
 					success({
 						status: 'authenticated',

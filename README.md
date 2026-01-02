@@ -235,33 +235,92 @@ npx tsx scripts/deployment/configure-s3-cors.ts
 
 ## 功能特性
 
+### 已实现功能 ✅
+
+#### 核心架构
 - ✅ 完整的后端架构 (7 层)
 - ✅ 类型安全 (100% TypeScript)
 - ✅ 高性能 (Fastify + Drizzle + BullMQ)
 - ✅ 异步任务处理 (图片/模型生成)
-- ✅ AI 服务集成 (阿里云/腾讯云/SiliconFlow)
-- ✅ S3 对象存储
+- ✅ 双进程架构 (API Server + Worker Server)
+
+#### API 和文档
+- ✅ TypeBox Schema 自动生成 OpenAPI 文档
+- ✅ JSend 响应规范 + 语义化 HTTP 状态码
+- ✅ 完整错误处理 (自定义错误类)
+- ✅ Scalar UI 文档界面
+- ✅ 健康检查端点 (MySQL + Redis)
+
+#### AI 服务集成
+- ✅ 多 Provider 支持 (阿里云/腾讯云/SiliconFlow)
+- ✅ 图片生成服务 (Aliyun, SiliconFlow)
+- ✅ 3D 模型生成服务 (Tencent Cloud AI3D)
+- ✅ LLM 提示词优化 (Qwen, SiliconFlow)
+- ✅ Factory 模式 Provider 管理
+
+#### 存储和数据
+- ✅ S3 对象存储集成
+- ✅ MySQL 数据库 (Drizzle ORM)
+- ✅ Redis 缓存和队列
+- ✅ 8 个数据表 (用户、任务、图片、模型、交互等)
+- ✅ Repository 模式数据访问
+
+#### 用户和认证
+- ✅ 外部用户服务集成
+- ✅ Token 认证中间件
+- ✅ 用户权限验证
+- ✅ 请求上下文注入
+
+#### 任务处理
+- ✅ BullMQ 任务队列
+- ✅ 图片生成 Worker
+- ✅ 3D 模型生成 Worker
+- ✅ 任务重试机制
+- ✅ 任务状态管理 (11 个状态)
+- ✅ 阶段管理 (4 个阶段)
+
+#### 模型管理
+- ✅ 模型发布/取消发布
+- ✅ 点赞/取消点赞
+- ✅ 收藏/取消收藏
+- ✅ 下载计数
+- ✅ 公开模型列表 (支持排序)
+- ✅ 用户模型列表
+- ✅ 点赞/收藏列表
+
+#### 开发工具
 - ✅ 结构化日志 (Pino)
-- ✅ 健康检查 (MySQL + Redis)
-- ✅ JSend 响应规范
-- ✅ 完整错误处理
+- ✅ 配置验证 (Zod)
+- ✅ 代码规范 (Biome.js)
+- ✅ 数据库迁移 (Drizzle Kit)
+- ✅ 维护脚本 (清理孤立模型、配置 S3 CORS)
 
-## 待实现功能
+### 待实现功能 ⏳
 
-### 高优先级
-- [ ] 用户认证中间件 (JWT)
-- [ ] 文件上传和下载
-- [ ] 权限验证增强
+#### 高优先级 (紧急修复)
+- [ ] **认证系统安全加固** - 修复 request.headers 伪造漏洞
+- [ ] **Redis 连接优化** - 添加最大重试次数和优雅关闭
+- [ ] **死信队列** - 保存最终失败的任务
+- [ ] **数据库事务** - 关键操作添加事务保护
+- [ ] **配置验证增强** - 区分开发/生产环境验证
 
-### 中优先级
-- [ ] 请求参数验证 (Zod)
-- [ ] API 文档 (Swagger/OpenAPI)
-- [ ] 分页统一处理
+详见 [URGENT_FIXES.md](./docs/URGENT_FIXES.md)
 
-### 低优先级
-- [ ] 单元测试
+#### 中优先级
+- [ ] 请求参数验证 (TypeBox)
+- [ ] API 限流和防滥用
+- [ ] 文件上传大小限制
+- [ ] S3 孤立文件清理定时任务
+- [ ] Worker 任务超时机制
+- [ ] SSE 推送失败降级处理
+
+#### 低优先级
+- [ ] 单元测试覆盖
 - [ ] 集成测试
 - [ ] 性能监控
+- [ ] APM 集成 (Sentry/DataDog)
+- [ ] 日志脱敏
+- [ ] 错误堆栈追踪优化
 
 ## License
 
