@@ -105,3 +105,49 @@ export const getUserFavoritesSchema = {
 		500: JSendFail, // 服务器内部错误
 	},
 } as const;
+
+/**
+ * GET /api/users/likes - 获取用户点赞的模型列表
+ */
+export const getUserLikesSchema = {
+	tags: ['用户'],
+	summary: '获取用户点赞的模型列表',
+	description: '获取当前登录用户点赞的所有 3D 模型（需要 Bearer Token）',
+	querystring: Type.Object({
+		limit: Type.Optional(Type.String({ description: '每页数量（默认 20）' })),
+		offset: Type.Optional(Type.String({ description: '偏移量（默认 0）' })),
+	}),
+	response: {
+		200: JSendSuccess(Type.Array(ModelEntity)),
+		401: JSendFail, // 未认证
+		500: JSendFail, // 服务器内部错误
+	},
+} as const;
+
+/**
+ * GET /api/users/my-models - 获取用户创建的模型列表
+ */
+export const getUserMyModelsSchema = {
+	tags: ['用户'],
+	summary: '获取用户创建的模型列表',
+	description: '获取当前登录用户创建的所有 3D 模型（需要 Bearer Token）',
+	querystring: Type.Object({
+		visibility: Type.Optional(
+			Type.Union([Type.Literal('PUBLIC'), Type.Literal('PRIVATE')], {
+				description: '可见性筛选（PUBLIC-公开，PRIVATE-私有）',
+			}),
+		),
+		sortBy: Type.Optional(
+			Type.Union([Type.Literal('latest'), Type.Literal('name'), Type.Literal('popular')], {
+				description: '排序方式（latest-最新，name-名称，popular-最受欢迎）',
+			}),
+		),
+		limit: Type.Optional(Type.String({ description: '每页数量（默认 20）' })),
+		offset: Type.Optional(Type.String({ description: '偏移量（默认 0）' })),
+	}),
+	response: {
+		200: JSendSuccess(Type.Array(ModelEntity)),
+		401: JSendFail, // 未认证
+		500: JSendFail, // 服务器内部错误
+	},
+} as const;

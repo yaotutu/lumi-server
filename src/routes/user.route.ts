@@ -3,10 +3,12 @@
  *
  * 职责：
  * 1. 代理外部用户服务的接口（需要 Bearer Token）
- * 2. 提供用户收藏功能接口
+ * 2. 提供用户收藏、点赞、我的模型功能接口
  *
  * 端点:
  * - GET  /api/users/favorites - 获取用户收藏的模型列表（本地实现）
+ * - GET  /api/users/likes - 获取用户点赞的模型列表（本地实现）
+ * - GET  /api/users/my-models - 获取用户创建的模型列表（本地实现）
  * - GET  /api/users/:id - 获取指定用户信息（代理）
  * - POST /api/users/update - 更新用户信息（代理）
  * - POST /api/users/modify-password - 修改密码（代理）
@@ -19,9 +21,12 @@
 import type { FastifyInstance } from 'fastify';
 import { getUserServiceClient } from '@/clients/user-service.client';
 import config from '@/config/index';
+import { modelRepository } from '@/repositories';
 import {
 	getUserByIdSchema,
 	getUserFavoritesSchema,
+	getUserLikesSchema,
+	getUserMyModelsSchema,
 	modifyPasswordSchema,
 	updateUserSchema,
 } from '@/schemas/routes/users.schema';
@@ -82,6 +87,90 @@ export async function userRoutes(fastify: FastifyInstance) {
 			}
 		},
 	);
+
+	/**
+	 * GET /api/users/likes
+	 * 获取用户点赞的模型列表（本地实现）
+	 */
+	fastify.get('/api/users/likes', { schema: getUserLikesSchema }, async (request, reply) => {
+		try {
+			// 从 request.user 获取用户 ID（由认证中间件注入）
+			const userId = request.user?.id;
+			if (!userId) {
+				return reply.code(401).send(fail('请先登录', 'UNAUTHORIZED'));
+			}
+
+			// 解析查询参数
+			const query = request.query as {
+				limit?: string;
+				offset?: string;
+			};
+
+			const limit = query.limit ? Number.parseInt(query.limit, 10) : undefined;
+			const offset = query.offset ? Number.parseInt(query.offset, 10) : undefined;
+
+			// 调用 Interaction Service 获取点赞的模型列表
+			const models = await InteractionService.getUserLikedModels(userId, {
+				limit,
+				offset,
+			});
+
+			logger.info({
+				msg: '✅ 获取用户点赞列表成功',
+				userId,
+				modelCount: models.length,
+			});
+
+			return reply.send(success(models));
+		} catch (error) {
+			logger.error({ msg: '获取用户点赞列表失败', error });
+			return reply.code(500).send(fail('获取用户点赞列表失败', 'INTERNAL_ERROR'));
+		}
+	});
+
+	/**
+	 * GET /api/users/my-models
+	 * 获取用户创建的模型列表（本地实现）
+	 */
+	fastify.get('/api/users/my-models', { schema: getUserMyModelsSchema }, async (request, reply) => {
+		try {
+			// 从 request.user 获取用户 ID（由认证中间件注入）
+			const userId = request.user?.id;
+			if (!userId) {
+				return reply.code(401).send(fail('请先登录', 'UNAUTHORIZED'));
+			}
+
+			// 解析查询参数
+			const query = request.query as {
+				visibility?: 'PUBLIC' | 'PRIVATE';
+				sortBy?: 'latest' | 'name' | 'popular';
+				limit?: string;
+				offset?: string;
+			};
+
+			const limit = query.limit ? Number.parseInt(query.limit, 10) : 20;
+			const offset = query.offset ? Number.parseInt(query.offset, 10) : 0;
+
+			// 调用 Model Repository 获取用户创建的模型列表
+			const models = await modelRepository.findByUserId(userId, {
+				visibility: query.visibility,
+				sortBy: query.sortBy || 'latest',
+				limit,
+				offset,
+			});
+
+			logger.info({
+				msg: '✅ 获取用户创建的模型列表成功',
+				userId,
+				modelCount: models.length,
+			});
+
+			return reply.send(success(models));
+		} catch (error) {
+			logger.error({ msg: '获取用户创建的模型列表失败', error });
+			return reply.code(500).send(fail('获取用户创建的模型列表失败', 'INTERNAL_ERROR'));
+		}
+	});
 
 	/**
 	 * GET /api/users/:id
