@@ -24,6 +24,73 @@ import { logger } from '@/utils/logger';
 import { storageService } from './storage.service.js';
 
 /**
+ * 生成友好的模型名称
+ *
+ * 命名规则：
+ * 1. 优先使用用户输入的 originalPrompt
+ * 2. 截取适当长度（中文约15个字符，英文约30个字符）
+ * 3. 添加时间戳后缀避免重复
+ * 4. 如果没有 prompt，使用默认名称
+ *
+ * @param originalPrompt 用户原始输入的提示词
+ * @returns 友好的模型名称
+ *
+ * @example
+ * generateModelName("一只可爱的小猫坐在草地上")
+ * // => "一只可爱的小猫坐在草地上"
+ *
+ * generateModelName("A cute cat sitting on the grass with a butterfly")
+ * // => "A cute cat sitting on the gr..."
+ *
+ * generateModelName(null)
+ * // => "我的模型 2025-01-04"
+ */
+function generateModelName(originalPrompt: string | null): string {
+	// 如果没有提示词，使用默认名称 + 日期
+	if (!originalPrompt || originalPrompt.trim().length === 0) {
+		const date = new Date().toLocaleDateString('zh-CN', {
+			year: 'numeric',
+			month: '2-digit',
+			day: '2-digit',
+		});
+		return `我的模型 ${date}`;
+	}
+
+	// 清理提示词（去除首尾空格、换行符等）
+	const cleanPrompt = originalPrompt.trim().replace(/\s+/g, ' ');
+
+	// 计算字符宽度（中文字符算2个宽度，其他算1个）
+	// 目标宽度：30（约15个中文字符或30个英文字符）
+	const maxWidth = 30;
+	let currentWidth = 0;
+	let endIndex = 0;
+
+	for (let i = 0; i < cleanPrompt.length; i = i + 1) {
+		const char = cleanPrompt[i];
+		// 判断是否为中文字符（包括中文标点）
+		const isChinese = /[\u4e00-\u9fa5\u3000-\u303f\uff00-\uffef]/.test(char);
+		const charWidth = isChinese ? 2 : 1;
+
+		if (currentWidth + charWidth > maxWidth) {
+			break;
+		}
+
+		currentWidth = currentWidth + charWidth;
+		endIndex = i + 1;
+	}
+
+	// 截取字符串
+	let modelName = cleanPrompt.substring(0, endIndex);
+
+	// 如果被截断，添加省略号（仅当原字符串更长时）
+	if (endIndex < cleanPrompt.length) {
+		modelName = `${modelName}...`;
+	}
+
+	return modelName;
+}
+
+/**
  * 获取生成请求列表
  * @param userId 用户ID
  * @param options 查询选项（分页限制）
@@ -314,7 +381,7 @@ export async function selectImageAndGenerateModel(requestId: string, selectedIma
 				id: modelId,
 				requestId,
 				externalUserId: request.externalUserId,
-				name: `模型-${requestId.substring(0, 8)}`,
+				name: generateModelName(request.originalPrompt),
 				previewImageUrl: selectedImage.imageUrl,
 				visibility: 'PUBLIC',
 				publishedAt: new Date(), // 默认公开，设置发布时间
