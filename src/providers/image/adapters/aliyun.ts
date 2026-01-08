@@ -76,7 +76,7 @@ export class AliyunImageAdapter extends BaseImageProvider {
 		const endpoint =
 			config.providers.aliyun.image.endpoint ||
 			'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation';
-		const model = 'qwen-image-plus'; // 使用 qwen-image-plus（性价比更高）
+		const model = config.providers.aliyun.image.model || 'qwen-image-plus'; // 从配置读取，默认使用 qwen-image-plus
 
 		return {
 			apiKey,

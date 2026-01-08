@@ -46,11 +46,12 @@ const envSchema = z.object({
 	// 阿里云文生图
 	ALIYUN_IMAGE_API_KEY: z.string().optional(),
 	ALIYUN_IMAGE_API_ENDPOINT: z.string().optional(),
+	ALIYUN_IMAGE_MODEL: z.string().default('qwen-image-plus'),
 
 	// 阿里云 LLM
-	QWEN_API_KEY: z.string().optional(),
-	QWEN_BASE_URL: z.string().optional(),
-	QWEN_MODEL: z.string().default('qwen-plus'),
+	QWEN_LLM_API_KEY: z.string().optional(),
+	QWEN_LLM_BASE_URL: z.string().optional(),
+	QWEN_LLM_MODEL: z.string().default('qwen-plus'),
 
 	// 腾讯云图生3D
 	TENCENTCLOUD_SECRET_ID: z.string().optional(),
@@ -138,12 +139,13 @@ export const config = {
 			image: {
 				apiKey: env.ALIYUN_IMAGE_API_KEY,
 				endpoint: env.ALIYUN_IMAGE_API_ENDPOINT,
+				model: env.ALIYUN_IMAGE_MODEL,
 			},
 		},
 		qwen: {
-			apiKey: env.QWEN_API_KEY,
-			baseUrl: env.QWEN_BASE_URL,
-			model: env.QWEN_MODEL,
+			apiKey: env.QWEN_LLM_API_KEY,
+			baseUrl: env.QWEN_LLM_BASE_URL,
+			model: env.QWEN_LLM_MODEL,
 		},
 		tencent: {
 			secretId: env.TENCENTCLOUD_SECRET_ID,
