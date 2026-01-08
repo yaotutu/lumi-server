@@ -22,7 +22,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // 自定义 transport 的绝对路径
-const customTransportPath = join(__dirname, '../transports/pino-pretty-console.js');
+const _customTransportPath = join(__dirname, '../transports/pino-pretty-console.js');
 
 /**
  * 控制台输出配置（简洁格式）

@@ -36,6 +36,13 @@
 			"when": 1766407633254,
 			"tag": "0004_common_supernaut",
 			"breakpoints": true
+		},
+		{
+			"idx": 5,
+			"version": "5",
+			"when": 1767511647609,
+			"tag": "0005_wooden_black_cat",
+			"breakpoints": true
 		}
 	]
 }

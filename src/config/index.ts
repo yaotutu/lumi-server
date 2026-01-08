@@ -82,6 +82,9 @@ const envSchema = z.object({
 
 	// 用户服务配置
 	USER_SERVICE_URL: z.string().default('http://user.ai3d.top'),
+
+	// 切片服务配置
+	SLICER_SERVICE_URL: z.string().url().default('http://localhost:8010'),
 });
 
 const parseResult = envSchema.safeParse(process.env);
@@ -175,6 +178,12 @@ export const config = {
 	// 用户服务配置
 	userService: {
 		url: env.USER_SERVICE_URL,
+	},
+
+	// 切片服务配置
+	slicerService: {
+		url: env.SLICER_SERVICE_URL,
+		timeout: 30000, // HTTP 请求超时时间（30秒）
 	},
 } as const;
 

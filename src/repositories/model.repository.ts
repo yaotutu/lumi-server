@@ -120,6 +120,29 @@ export class ModelRepository {
 	}
 
 	/**
+	 * 根据切片任务 ID 查询模型
+	 * 用于查询切片任务状态
+	 */
+	// biome-ignore lint/suspicious/noExplicitAny: 复杂的 join 查询返回类型，待定义专门的返回类型接口
+	async findBySliceTaskId(sliceTaskId: string): Promise<any> {
+		const [result] = await db
+			.select({
+				id: models.id,
+				sliceTaskId: models.sliceTaskId,
+				sliceStatus: models.sliceStatus,
+				gcodeUrl: models.gcodeUrl,
+				gcodeMetadata: models.gcodeMetadata,
+				externalUserId: models.externalUserId,
+				updatedAt: models.updatedAt,
+			})
+			.from(models)
+			.where(eq(models.sliceTaskId, sliceTaskId))
+			.limit(1);
+
+		return result;
+	}
+
+	/**
 	 * 根据用户外部 ID 查询模型列表（支持筛选和排序）
 	 */
 	async findByUserId(

@@ -55,7 +55,7 @@ export async function verifyTokenAndGetUser(token: string): Promise<ExternalUser
 			msg: '外部用户服务响应格式异常',
 			responseCode: response.code,
 			responseMsg: response.msg,
-			token: token.substring(0, 17) + '...', // "Bearer " + 前10个字符
+			token: `${token.substring(0, 17)}...`, // "Bearer " + 前10个字符
 		});
 
 		return null;

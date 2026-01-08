@@ -1,5 +1,4 @@
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
-import type { MySqlTransaction } from 'drizzle-orm/mysql-core';
 import { db } from '@/db/drizzle';
 import {
 	type GenerationRequest,

@@ -43,7 +43,7 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
 	const authHeader = request.headers.authorization;
 
 	// 如果有 Token，尝试验证并填充 request.user（可选认证）
-	if (authHeader && authHeader.startsWith('Bearer ')) {
+	if (authHeader?.startsWith('Bearer ')) {
 		const externalUser = await externalUserService.verifyTokenAndGetUser(authHeader);
 
 		if (externalUser) {

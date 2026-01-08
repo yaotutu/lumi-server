@@ -114,6 +114,20 @@ export class AliyunImageAdapter extends BaseImageProvider {
 			};
 
 			try {
+				// 打印完整的请求报文（脱敏处理）
+				logger.info({
+					msg: '📤 [AliyunImageProvider] 发送请求',
+					url: providerConfig.endpoint,
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						Authorization: `Bearer ${providerConfig.apiKey.substring(0, 20)}...***`,
+					},
+					body: requestBody,
+					imageIndex: i + 1,
+					totalCount: count,
+				});
+
 				const response = await fetch(providerConfig.endpoint, {
 					method: 'POST',
 					headers: {
@@ -123,30 +137,59 @@ export class AliyunImageAdapter extends BaseImageProvider {
 					body: JSON.stringify(requestBody),
 				});
 
-				if (!response.ok) {
-					const errorData = await response.json().catch(() => ({}));
+				// 解析响应体
+				const responseText = await response.text();
+				let data: QwenImageResponse;
 
-					const errorMsg = `阿里云API错误: ${response.status} - ${(errorData as { message?: string }).message || response.statusText}`;
+				try {
+					data = JSON.parse(responseText) as QwenImageResponse;
+				} catch (parseError) {
 					logger.error({
-						msg: '阿里云 API 调用失败',
-						status: response.status,
-						errorData,
+						msg: '❌ [AliyunImageProvider] 响应 JSON 解析失败',
+						url: providerConfig.endpoint,
+						statusCode: response.status,
+						statusText: response.statusText,
+						responseText,
+						parseError: parseError instanceof Error ? parseError.message : String(parseError),
 					});
+					throw new Error(`Failed to parse JSON response: ${responseText}`);
+				}
+
+				// 检查 HTTP 状态码
+				if (!response.ok) {
+					logger.error({
+						msg: '❌ [AliyunImageProvider] HTTP 错误响应',
+						url: providerConfig.endpoint,
+						httpStatusCode: response.status,
+						httpStatusText: response.statusText,
+						responseHeaders: Object.fromEntries(response.headers.entries()),
+						responseBody: data,
+						imageIndex: i + 1,
+						totalCount: count,
+					});
+
+					const errorMsg = `阿里云API错误: ${response.status} - ${(data as unknown as { message?: string }).message || response.statusText}`;
 					throw new Error(errorMsg);
 				}
 
-				const data = (await response.json()) as QwenImageResponse;
-
-				// 调试：打印完整响应数据
-				logger.debug({
-					msg: 'API响应',
+				// 打印完整的响应报文
+				logger.info({
+					msg: '📥 [AliyunImageProvider] 收到响应',
+					url: providerConfig.endpoint,
+					httpStatusCode: response.status,
+					httpStatusText: response.statusText,
+					responseHeaders: Object.fromEntries(response.headers.entries()),
+					responseBody: data,
 					imageIndex: i + 1,
 					totalCount: count,
-					response: data,
 				});
 
 				// 检查响应数据结构
 				if (!data || !data.output || !data.output.choices) {
+					logger.error({
+						msg: '❌ [AliyunImageProvider] API 响应格式错误',
+						responseBody: data,
+					});
 					throw new Error(`API响应格式错误: ${JSON.stringify(data)}`);
 				}
 
@@ -156,6 +199,12 @@ export class AliyunImageAdapter extends BaseImageProvider {
 					const imageContent = choice.message.content.find((c) => c.image);
 					if (imageContent?.image) {
 						allImages.push(imageContent.image);
+						logger.info({
+							msg: '✅ [AliyunImageProvider] 图片生成成功',
+							imageIndex: i + 1,
+							totalCount: count,
+							imageUrlPreview: `${imageContent.image.substring(0, 80)}...`,
+						});
 					} else {
 						throw new Error('响应中未找到图片URL');
 					}
@@ -164,10 +213,11 @@ export class AliyunImageAdapter extends BaseImageProvider {
 				}
 			} catch (error) {
 				logger.error({
-					msg: '生成图片失败',
+					msg: '❌ [AliyunImageProvider] 生成图片失败',
 					imageIndex: i + 1,
 					totalCount: count,
-					error,
+					error: error instanceof Error ? error.message : String(error),
+					stack: error instanceof Error ? error.stack : undefined,
 				});
 				throw error;
 			}
