@@ -44,6 +44,9 @@ RUN npm ci --omit=dev && \
 # 从构建阶段复制编译后的代码
 COPY --from=builder /app/dist ./dist
 
+# 复制数据库迁移文件（SQL 文件不会被 TypeScript 编译，需要单独复制）
+COPY --from=builder /app/src/db/migrations ./src/db/migrations
+
 # 复制必要的配置文件（如果有）
 COPY --from=builder /app/drizzle.config.ts ./drizzle.config.ts
 COPY --from=builder /app/tsconfig.json ./tsconfig.json
