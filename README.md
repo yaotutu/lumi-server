@@ -306,21 +306,8 @@ npx tsx scripts/deployment/configure-s3-cors.ts
 
 详见 [URGENT_FIXES.md](./docs/URGENT_FIXES.md)
 
-#### 中优先级
-- [ ] 请求参数验证 (TypeBox)
-- [ ] API 限流和防滥用
-- [ ] 文件上传大小限制
-- [ ] S3 孤立文件清理定时任务
-- [ ] Worker 任务超时机制
-- [ ] SSE 推送失败降级处理
 
-#### 低优先级
-- [ ] 单元测试覆盖
-- [ ] 集成测试
-- [ ] 性能监控
-- [ ] APM 集成 (Sentry/DataDog)
-- [ ] 日志脱敏
-- [ ] 错误堆栈追踪优化
+
 
 ## License
 
