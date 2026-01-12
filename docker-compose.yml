@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  # Lumi Server（同时运行 API 和 Worker）
+  lumi-server:
+    image: yaotutu/lumi-server:dev-latest
+    container_name: lumi-server
+    ports:
+      - "3000:3000"
+    environment:
+      # 数据库配置
+      - DATABASE_URL=${DATABASE_URL}
+
+      # Redis 配置
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_DB=${REDIS_DB:-0}
+      - REDIS_TLS=${REDIS_TLS:-false}
+      - REDIS_CLUSTER_MODE=${REDIS_CLUSTER_MODE:-false}
+
+      # S3 配置
+      - S3_ENDPOINT=${S3_ENDPOINT}
+      - S3_REGION=${S3_REGION}
+      - S3_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID}
+      - S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY}
+      - S3_BUCKET=${S3_BUCKET}
+
+      # AI Providers
+      - ALIYUN_IMAGE_API_KEY=${ALIYUN_IMAGE_API_KEY}
+      - TENCENTCLOUD_SECRET_ID=${TENCENTCLOUD_SECRET_ID}
+      - TENCENTCLOUD_SECRET_KEY=${TENCENTCLOUD_SECRET_KEY}
+      - SILICONFLOW_API_KEY=${SILICONFLOW_API_KEY}
+
+      # CORS
+      - FRONTEND_URLS=${FRONTEND_URLS}
+
+      # 用户服务
+      - USER_SERVICE_URL=${USER_SERVICE_URL}
+
+      # 其他配置
+      - NODE_ENV=production
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    depends_on:
+      - redis
+    restart: unless-stopped
+    networks:
+      - lumi-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Redis（本地开发用）
+  redis:
+    image: redis:7-alpine
+    container_name: lumi-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    networks:
+      - lumi-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+networks:
+  lumi-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+    driver: local

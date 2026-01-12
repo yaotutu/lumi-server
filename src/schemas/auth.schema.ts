@@ -118,7 +118,7 @@ export const getMeSchema = {
 								}),
 							),
 							gender: Type.Optional(Type.String({ description: '性别（可选）' })),
-							stats: Type.Optional(UserStatsEntity, { description: '用户统计数据（可选）' }),
+							stats: Type.Optional(UserStatsEntity),
 						}),
 						Type.Null(),
 					],

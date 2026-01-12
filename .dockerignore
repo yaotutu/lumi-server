@@ -1,0 +1,78 @@
+# 依赖目录
+node_modules
+npm-debug.log
+yarn-error.log
+# package-lock.json  # 保留此文件，npm ci 需要它
+yarn.lock
+pnpm-lock.yaml
+
+# 构建输出（在容器内重新构建）
+dist
+build
+*.tsbuildinfo
+
+# 测试文件
+__tests__
+__mocks__
+*.test.ts
+*.test.js
+*.spec.ts
+*.spec.js
+coverage
+.nyc_output
+
+# 环境变量文件（敏感信息）
+.env
+.env.*
+!.env.example
+
+# Git 相关
+.git
+.gitignore
+.gitattributes
+
+# GitHub Actions
+.github
+
+# IDE 配置
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# 日志文件
+logs
+*.log
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
+
+# 文档
+*.md
+!README.md
+docs
+
+# Docker 相关
+Dockerfile*
+.dockerignore
+docker-compose*.yml
+
+# 临时文件
+tmp
+temp
+*.tmp
+
+# Drizzle Kit 文件
+drizzle
+
+# 其他
+.editorconfig
+.eslintrc*
+.prettierrc*
+biome.json
