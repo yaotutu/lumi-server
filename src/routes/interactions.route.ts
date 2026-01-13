@@ -4,7 +4,11 @@
  */
 
 import type { FastifyInstance } from 'fastify';
-import { batchInteractionsSchema } from '@/schemas/interaction.schema';
+import {
+	batchInteractionsSchema,
+	createInteractionSchema,
+	getInteractionsSchema,
+} from '@/schemas/routes/interactions.schema';
 import * as InteractionService from '@/services/interaction.service';
 import { logger } from '@/utils/logger';
 import { fail, success } from '@/utils/response';
@@ -23,6 +27,7 @@ export async function interactionRoutes(fastify: FastifyInstance) {
 	 */
 	fastify.get<{ Params: { id: string } }>(
 		'/api/gallery/models/:id/interactions',
+		{ schema: getInteractionsSchema },
 		async (request, reply) => {
 			try {
 				const { id: modelId } = request.params;
@@ -78,82 +83,86 @@ export async function interactionRoutes(fastify: FastifyInstance) {
 	fastify.post<{
 		Params: { id: string };
 		Body: { type: 'LIKE' | 'FAVORITE' };
-	}>('/api/gallery/models/:id/interactions', async (request, reply) => {
-		try {
-			const { id: modelId } = request.params;
-			const { type } = request.body;
-			const userId = request.user?.id;
+	}>(
+		'/api/gallery/models/:id/interactions',
+		{ schema: createInteractionSchema },
+		async (request, reply) => {
+			try {
+				const { id: modelId } = request.params;
+				const { type } = request.body;
+				const userId = request.user?.id;
 
-			if (!userId) {
-				return reply.status(401).send({
-					status: 'fail',
-					data: {
-						message: '请先登录',
-						code: 'UNAUTHORIZED',
-					},
-				});
-			}
+				if (!userId) {
+					return reply.status(401).send({
+						status: 'fail',
+						data: {
+							message: '请先登录',
+							code: 'UNAUTHORIZED',
+						},
+					});
+				}
 
-			// 验证参数
-			if (!type || (type !== 'LIKE' && type !== 'FAVORITE')) {
-				return reply.status(400).send(fail('type 必须是 LIKE 或 FAVORITE'));
-			}
+				// 验证参数
+				if (!type || (type !== 'LIKE' && type !== 'FAVORITE')) {
+					return reply.status(400).send(fail('type 必须是 LIKE 或 FAVORITE'));
+				}
 
-			// 执行交互操作
-			let isInteracted: boolean;
-			let likeCount: number;
-			let favoriteCount: number;
+				// 执行交互操作
+				let isInteracted: boolean;
+				let likeCount: number;
+				let favoriteCount: number;
 
-			if (type === 'LIKE') {
-				const result = await InteractionService.toggleLike(userId, modelId);
-				isInteracted = result.liked;
-				likeCount = result.likeCount;
-				// 获取最新的 favoriteCount
-				const _model = await InteractionService.getUserInteractionStatus(userId, modelId);
-				const modelData = await import('@/repositories').then((m) =>
-					m.modelRepository.findById(modelId),
-				);
-				favoriteCount = modelData?.favoriteCount || 0;
-			} else {
-				const result = await InteractionService.toggleFavorite(userId, modelId);
-				isInteracted = result.favorited;
-				favoriteCount = result.favoriteCount;
-				// 获取最新的 likeCount
-				const modelData = await import('@/repositories').then((m) =>
-					m.modelRepository.findById(modelId),
-				);
-				likeCount = modelData?.likeCount || 0;
-			}
+				if (type === 'LIKE') {
+					const result = await InteractionService.toggleLike(userId, modelId);
+					isInteracted = result.liked;
+					likeCount = result.likeCount;
+					// 获取最新的 favoriteCount
+					const _model = await InteractionService.getUserInteractionStatus(userId, modelId);
+					const modelData = await import('@/repositories').then((m) =>
+						m.modelRepository.findById(modelId),
+					);
+					favoriteCount = modelData?.favoriteCount || 0;
+				} else {
+					const result = await InteractionService.toggleFavorite(userId, modelId);
+					isInteracted = result.favorited;
+					favoriteCount = result.favoriteCount;
+					// 获取最新的 likeCount
+					const modelData = await import('@/repositories').then((m) =>
+						m.modelRepository.findById(modelId),
+					);
+					likeCount = modelData?.likeCount || 0;
+				}
 
-			logger.info({
-				msg: '✅ 用户交互操作',
-				userId,
-				modelId,
-				type,
-				isInteracted,
-				likeCount,
-				favoriteCount,
-			});
-
-			// JSend success 格式
-			return reply.send(
-				success({
-					isInteracted,
+				logger.info({
+					msg: '✅ 用户交互操作',
+					userId,
+					modelId,
 					type,
+					isInteracted,
 					likeCount,
 					favoriteCount,
-				}),
-			);
-		} catch (error) {
-			logger.error({ msg: '交互操作失败', error, modelId: request.params.id });
+				});
 
-			if (error instanceof Error && error.message.includes('不存在')) {
-				return reply.status(404).send(fail(error.message));
+				// JSend success 格式
+				return reply.send(
+					success({
+						isInteracted,
+						type,
+						likeCount,
+						favoriteCount,
+					}),
+				);
+			} catch (error) {
+				logger.error({ msg: '交互操作失败', error, modelId: request.params.id });
+
+				if (error instanceof Error && error.message.includes('不存在')) {
+					return reply.status(404).send(fail(error.message));
+				}
+
+				return reply.code(500).send(fail('交互操作失败'));
 			}
-
-			return reply.code(500).send(fail('交互操作失败'));
-		}
-	});
+		},
+	);
 
 	/**
 	 * POST /api/gallery/models/batch-interactions

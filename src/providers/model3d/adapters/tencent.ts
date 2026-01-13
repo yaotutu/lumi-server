@@ -89,20 +89,45 @@ export class TencentModel3DAdapter extends BaseModel3DProvider {
 				EnablePBR: false, // 不启用 PBR 材质
 			};
 
+			// 打印完整的请求报文
 			logger.info({
-				msg: '提交3D生成任务',
-				imageUrl: `${params.imageUrl.substring(0, 80)}...`,
-				resultFormat: RESULT_FORMAT,
-				enablePBR: false,
+				msg: '📤 [TencentModel3DProvider] 提交 3D 生成任务',
+				endpoint: 'ai3d.tencentcloudapi.com',
+				action: 'SubmitHunyuanTo3DRapidJob',
+				params: {
+					...apiParams,
+					ImageUrl: `${params.imageUrl.substring(0, 80)}...`, // 截断 URL
+				},
 			});
 
 			// 调用腾讯云 API - 提交图生 3D 快速任务
 			const response = await client.SubmitHunyuanTo3DRapidJob(apiParams);
 
+			// 打印完整的响应报文
+			logger.info({
+				msg: '📥 [TencentModel3DProvider] 收到响应',
+				endpoint: 'ai3d.tencentcloudapi.com',
+				action: 'SubmitHunyuanTo3DRapidJob',
+				response: {
+					JobId: response.JobId,
+					RequestId: response.RequestId,
+				},
+			});
+
 			// 验证响应数据
 			if (!response.JobId) {
+				logger.error({
+					msg: '❌ [TencentModel3DProvider] API 返回数据异常',
+					response,
+				});
 				throw new Error('腾讯云 API 返回数据异常: 缺少 JobId');
 			}
+
+			logger.info({
+				msg: '✅ [TencentModel3DProvider] 3D 任务提交成功',
+				jobId: response.JobId,
+				requestId: response.RequestId,
+			});
 
 			// 返回格式化响应
 			return {
@@ -114,17 +139,36 @@ export class TencentModel3DAdapter extends BaseModel3DProvider {
 			const tencentError = error as { code?: string; message?: string };
 			const errorMsg = tencentError.message || '未知错误';
 
+			// 详细的错误日志
+			logger.error({
+				msg: '❌ [TencentModel3DProvider] 提交任务失败',
+				endpoint: 'ai3d.tencentcloudapi.com',
+				action: 'SubmitHunyuanTo3DRapidJob',
+				errorCode: tencentError.code,
+				errorMessage: errorMsg,
+				stack: error instanceof Error ? error.stack : undefined,
+			});
+
 			// 判断错误类型并记录日志
 			if (errorMsg.includes('任务上限') || errorMsg.includes('并发') || errorMsg.includes('限流')) {
-				logger.error({ msg: '腾讯云并发限制错误', error: errorMsg });
+				logger.error({
+					msg: '⚠️ [TencentModel3DProvider] 腾讯云并发限制错误',
+					error: errorMsg,
+				});
 			} else if (
 				errorMsg.includes('认证失败') ||
 				errorMsg.includes('签名错误') ||
 				errorMsg.includes('SecretId')
 			) {
-				logger.error({ msg: '腾讯云认证错误', error: errorMsg });
+				logger.error({
+					msg: '⚠️ [TencentModel3DProvider] 腾讯云认证错误',
+					error: errorMsg,
+				});
 			} else if (errorMsg.includes('权限') || errorMsg.includes('余额')) {
-				logger.error({ msg: '腾讯云权限/余额错误', error: errorMsg });
+				logger.error({
+					msg: '⚠️ [TencentModel3DProvider] 腾讯云权限/余额错误',
+					error: errorMsg,
+				});
 			}
 
 			// 抛出包含详细信息的错误
@@ -140,20 +184,78 @@ export class TencentModel3DAdapter extends BaseModel3DProvider {
 			// 创建客户端实例
 			const client = this.createClient();
 
+			// 打印请求信息
+			logger.info({
+				msg: '📤 [TencentModel3DProvider] 查询任务状态',
+				endpoint: 'ai3d.tencentcloudapi.com',
+				action: 'QueryHunyuanTo3DRapidJob',
+				params: { JobId: jobId },
+			});
+
 			// 调用腾讯云 API - 查询快速任务状态
 			const response = await client.QueryHunyuanTo3DRapidJob({
 				JobId: jobId,
 			});
 
+			// 打印完整的响应报文
+			logger.info({
+				msg: '📥 [TencentModel3DProvider] 收到响应',
+				endpoint: 'ai3d.tencentcloudapi.com',
+				action: 'QueryHunyuanTo3DRapidJob',
+				response: {
+					JobId: jobId,
+					Status: response.Status,
+					ErrorCode: response.ErrorCode,
+					ErrorMessage: response.ErrorMessage,
+					ResultFiles: response.ResultFile3Ds?.map((file) => ({
+						Type: file.Type,
+						Url: file.Url ? `${file.Url.substring(0, 80)}...` : undefined,
+						PreviewImageUrl: file.PreviewImageUrl
+							? `${file.PreviewImageUrl.substring(0, 80)}...`
+							: undefined,
+					})),
+					RequestId: response.RequestId,
+				},
+			});
+
 			// 验证响应数据
 			if (!response.Status) {
+				logger.error({
+					msg: '❌ [TencentModel3DProvider] API 返回数据异常',
+					response,
+				});
 				throw new Error('腾讯云 API 返回数据异常: 缺少 Status 字段');
+			}
+
+			// 根据状态记录不同级别的日志
+			const status = response.Status as 'WAIT' | 'RUN' | 'DONE' | 'FAIL';
+			if (status === 'FAIL') {
+				logger.error({
+					msg: '❌ [TencentModel3DProvider] 任务失败',
+					jobId,
+					status,
+					errorCode: response.ErrorCode,
+					errorMessage: response.ErrorMessage,
+				});
+			} else if (status === 'DONE') {
+				logger.info({
+					msg: '✅ [TencentModel3DProvider] 任务完成',
+					jobId,
+					status,
+					resultFileCount: response.ResultFile3Ds?.length || 0,
+				});
+			} else {
+				logger.info({
+					msg: '⏳ [TencentModel3DProvider] 任务进行中',
+					jobId,
+					status,
+				});
 			}
 
 			// 返回格式化响应
 			return {
 				jobId,
-				status: response.Status as 'WAIT' | 'RUN' | 'DONE' | 'FAIL',
+				status,
 				errorCode: response.ErrorCode,
 				errorMessage: response.ErrorMessage,
 				resultFiles: response.ResultFile3Ds?.map((file) => ({
@@ -167,6 +269,17 @@ export class TencentModel3DAdapter extends BaseModel3DProvider {
 			// 处理腾讯云 SDK 原生错误
 			const tencentError = error as { code?: string; message?: string };
 			const errorMsg = tencentError.message || '未知错误';
+
+			// 详细的错误日志
+			logger.error({
+				msg: '❌ [TencentModel3DProvider] 查询任务状态失败',
+				endpoint: 'ai3d.tencentcloudapi.com',
+				action: 'QueryHunyuanTo3DRapidJob',
+				jobId,
+				errorCode: tencentError.code,
+				errorMessage: errorMsg,
+				stack: error instanceof Error ? error.stack : undefined,
+			});
 
 			// 状态查询失败通常是网络或临时性错误，可重试
 			throw new Error(`腾讯云任务状态查询失败: ${errorMsg}`);

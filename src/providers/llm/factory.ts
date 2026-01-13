@@ -31,7 +31,7 @@ export function getLLMProviderType(): LLMProviderType {
 	}
 
 	// 3. 未配置任何渠道
-	throw new Error('未配置 LLM 渠道，请设置 SILICONFLOW_API_KEY 或 QWEN_API_KEY');
+	throw new Error('未配置 LLM 渠道，请设置 SILICONFLOW_API_KEY 或 QWEN_LLM_API_KEY');
 }
 
 /**

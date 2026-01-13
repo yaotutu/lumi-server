@@ -4,25 +4,21 @@
  */
 
 import type { FastifyInstance } from 'fastify';
-import { config } from '@/config/index.js';
-import { imageQueue } from '@/queues';
 import {
 	createTaskSchema,
 	deleteTaskSchema,
 	getPrintStatusSchema,
 	getTaskSchema,
+	getTaskStatusSchema,
 	listTasksSchema,
 	selectImageSchema,
 	submitPrintSchema,
-} from '@/schemas/task.schema';
+} from '@/schemas/routes/tasks.schema';
 import * as GenerationRequestService from '@/services/generation-request.service';
-import * as PromptOptimizerService from '@/services/prompt-optimizer.service';
-import { sseConnectionManager } from '@/services/sse-connection-manager';
 import { ValidationError } from '@/utils/errors';
 import { logger } from '@/utils/logger';
 import { getUserIdFromRequest } from '@/utils/request-auth';
 import { fail, success } from '@/utils/response';
-import { adaptGenerationRequest } from '@/utils/task-adapter';
 
 /**
  * 注册生成请求路由
@@ -59,9 +55,13 @@ export async function taskRoutes(fastify: FastifyInstance) {
 				}),
 			);
 		} catch (error) {
+			// 检查是否是认证错误
+			if (error instanceof Error && error.message.includes('未认证')) {
+				return reply.code(401).send(fail('请先登录', 'UNAUTHORIZED'));
+			}
+
 			logger.error({ msg: '获取生成请求列表失败', error });
-			reply.code(500);
-			return reply.send(fail('获取生成请求列表失败'));
+			return reply.code(500).send(fail('获取生成请求列表失败'));
 		}
 	});
 
@@ -98,55 +98,36 @@ export async function taskRoutes(fastify: FastifyInstance) {
 	fastify.post<{
 		Body: {
 			prompt: string;
-			optimizePrompt?: boolean;
 		};
 	}>('/api/tasks', { schema: createTaskSchema }, async (request, reply) => {
 		try {
 			const userId = getUserIdFromRequest(request);
-			const { prompt, optimizePrompt = true } = request.body;
+			const { prompt } = request.body;
 
 			// 验证提示词
 			if (!prompt || prompt.trim().length === 0) {
 				throw new ValidationError('提示词不能为空');
 			}
 
-			// 优化提示词 (可选)
-			let finalPrompt = prompt.trim();
-			if (optimizePrompt) {
-				logger.info({ msg: '开始优化提示词', originalPrompt: prompt });
-				finalPrompt = await PromptOptimizerService.optimizePromptFor3DPrint(prompt);
-			}
+			// ✅ 创建生成请求（快速返回，不等待 LLM 和队列）
+			const generationRequest = await GenerationRequestService.createRequest(userId, prompt.trim());
 
-			// ✅ 创建生成请求（自动创建 4 个 Image 和 4 个 ImageJob）
-			const generationRequest = await GenerationRequestService.createRequest(userId, finalPrompt);
-
-			// ✅ 将 4 个已创建的 ImageJob 加入 BullMQ 队列
-			const imageJobs = await Promise.all(
-				generationRequest.images.map(async (image) => {
-					// 获取该 Image 关联的 Job（generationJob 字段）
-					const job = image.generationJob;
-					if (!job || !job.id) {
-						throw new Error(`Image ${image.id} 没有关联的 Job`);
-					}
-
-					return imageQueue.add(`image-${image.id}`, {
-						jobId: job.id, // ✅ 正确的 ImageJob ID
-						imageId: image.id, // ✅ 正确的 Image ID
-						prompt: finalPrompt,
-						requestId: generationRequest.id,
-						userId,
-					});
-				}),
-			);
-
-			logger.info({
-				msg: '✅ 生成请求创建成功，已加入队列',
-				requestId: generationRequest.id,
-				imageCount: generationRequest.images.length,
-				jobCount: imageJobs.length,
+			// ✅ 使用 setImmediate 触发后台异步处理（生成提示词 + 加入队列）
+			setImmediate(() => {
+				GenerationRequestService.processPromptAndEnqueueJobs(
+					generationRequest.id,
+					prompt.trim(),
+					userId,
+				);
 			});
 
-			// JSend success 格式 - 直接返回 generationRequest
+			logger.info({
+				msg: '✅ 生成请求创建成功，后台任务已触发',
+				requestId: generationRequest.id,
+				imageCount: generationRequest.images.length,
+			});
+
+			// JSend success 格式 - 立即返回 generationRequest（此时 imagePrompt 为 null，后续异步填充）
 			return reply.status(201).send(success(generationRequest));
 		} catch (error) {
 			logger.error({ msg: '创建生成请求失败', error });
@@ -189,10 +170,13 @@ export async function taskRoutes(fastify: FastifyInstance) {
 				modelId: result.model?.id,
 			});
 
+			// 重新查询完整的 task 对象（包含更新后的状态）
+			const updatedTask = await GenerationRequestService.getRequestById(id);
+
 			return reply.send(
 				success({
+					task: updatedTask,
 					model: result.model,
-					selectedImageIndex: result.selectedImageIndex,
 				}),
 			);
 		} catch (error) {
@@ -321,120 +305,48 @@ export async function taskRoutes(fastify: FastifyInstance) {
 	);
 
 	/**
-	 * GET /api/tasks/:id/events
-	 * SSE (Server-Sent Events) 实时任务状态推送
+	 * GET /api/tasks/:id/status
+	 * 轮询获取任务状态（替代 SSE）
 	 *
-	 * 事件类型：
-	 * - image:generating - 图片开始生成
-	 * - image:completed - 图片生成完成（包含 imageUrl）
-	 * - image:failed - 图片生成失败
-	 * - model:generating - 模型开始生成
-	 * - model:progress - 模型生成进度更新（包含 progress 0-100）
-	 * - model:completed - 模型生成完成（包含 modelUrl）
-	 * - model:failed - 模型生成失败
-	 * - task:init - 任务初始状态（连接建立后立即发送）
+	 * 支持条件查询：
+	 * - 传递 since 参数（上次查询的 updatedAt）
+	 * - 如果数据未更新，返回 304 Not Modified，减少网络流量
 	 */
-	fastify.get<{ Params: { id: string } }>('/api/tasks/:id/events', async (request, reply) => {
-		const { id: taskId } = request.params;
-
-		// 从认证中间件获取用户信息
-		const userId = getUserIdFromRequest(request);
-
-		logger.info({ msg: '建立 SSE 连接', taskId, userId });
-
-		// 获取请求的 Origin
-		const origin = request.headers.origin as string;
-
-		// 检查 Origin 是否在白名单中
-		const allowedOrigin = config.cors.origins.includes(origin) ? origin : config.cors.origins[0];
-
-		// 设置 SSE 响应头 (包含 CORS 头)
-		reply.raw.writeHead(200, {
-			'Content-Type': 'text/event-stream',
-			'Cache-Control': 'no-cache, no-transform',
-			Connection: 'keep-alive',
-			'X-Accel-Buffering': 'no', // 禁用 Nginx 缓冲
-			// ✅ CORS 头 (SSE 必须手动添加)
-			'Access-Control-Allow-Origin': allowedOrigin,
-			'Access-Control-Allow-Credentials': 'true',
-		});
-
-		// 刷新响应头，确保客户端立即收到
-		reply.raw.flushHeaders();
-
-		// 存储心跳定时器
-		let heartbeatInterval: NodeJS.Timeout | undefined;
-		let connection: ReturnType<typeof sseConnectionManager.addConnection> | undefined;
+	fastify.get<{
+		Params: { id: string };
+		Querystring: { since?: string };
+	}>('/api/tasks/:id/status', { schema: getTaskStatusSchema }, async (request, reply) => {
+		const { id } = request.params;
+		const { since } = request.query;
 
 		try {
-			// 添加到连接管理器
-			connection = sseConnectionManager.addConnection(taskId, reply);
+			// 查询任务详情（包含 images 和 model）
+			const task = await GenerationRequestService.getRequestById(id);
 
-			// 1. 发送初始状态
-			logger.info({ msg: '发送任务初始状态', taskId });
+			// 优化：如果数据未更新，返回 304 Not Modified
+			if (since) {
+				const sinceDate = new Date(since);
+				const taskUpdatedAt = new Date(task.updatedAt);
 
-			try {
-				// 查询任务详情
-				const generationRequest = await GenerationRequestService.getRequestById(taskId);
-
-				logger.info({ msg: '📊 查询到任务数据', taskId, data: generationRequest });
-
-				// 适配为前端格式
-				const taskData = adaptGenerationRequest(generationRequest);
-
-				logger.info({ msg: '✅ 适配后的任务数据', taskId, data: taskData });
-
-				// 发送初始状态事件
-				reply.raw.write(`event: task:init\ndata: ${JSON.stringify(taskData)}\n\n`);
-
-				logger.info({ msg: '📡 已发送 task:init 事件', taskId });
-			} catch (error) {
-				logger.error({ msg: '查询任务详情失败', error, taskId });
-				// 发送错误事件
-				reply.raw.write(
-					`event: error\ndata: ${JSON.stringify({ message: '任务不存在或已删除' })}\n\n`,
-				);
-				// 关闭连接
-				reply.raw.end();
-				sseConnectionManager.removeConnection(connection);
-				return;
+				if (taskUpdatedAt <= sinceDate) {
+					// 数据未更新，返回 304
+					return reply.code(304).send();
+				}
 			}
 
-			// 2. 设置心跳定时器（每 30 秒）
-			heartbeatInterval = setInterval(() => {
-				try {
-					if (connection) {
-						sseConnectionManager.sendHeartbeat(connection);
-					}
-				} catch (error) {
-					logger.error({ msg: '心跳发送失败，清理连接', error, taskId });
-					clearInterval(heartbeatInterval);
-				}
-			}, 30000);
+			// 设置缓存头（禁用缓存，确保每次都查询最新数据）
+			reply.header('Cache-Control', 'no-cache, must-revalidate');
 
-			// 3. 监听客户端断开
-			request.raw.on('close', () => {
-				logger.info({ msg: '客户端主动断开 SSE 连接', taskId });
-				if (heartbeatInterval) {
-					clearInterval(heartbeatInterval);
-				}
-				if (connection) {
-					sseConnectionManager.removeConnection(connection);
-				}
-			});
-
-			// 保持连接打开，不调用 reply.send()
+			// 返回完整任务数据（与 GET /api/tasks/:id 相同的格式）
+			return reply.send(success(task));
 		} catch (error) {
-			logger.error({ msg: 'SSE 流初始化异常', error, taskId });
-			if (heartbeatInterval) {
-				clearInterval(heartbeatInterval);
+			logger.error({ msg: '查询任务状态失败（轮询）', error, taskId: id });
+
+			if (error instanceof Error && error.message.includes('不存在')) {
+				return reply.code(404).send(fail('任务不存在'));
 			}
-			if (connection) {
-				sseConnectionManager.removeConnection(connection);
-			}
-			if (!reply.sent) {
-				reply.raw.end();
-			}
+
+			return reply.code(500).send(fail('查询任务状态失败'));
 		}
 	});
 }

@@ -15,6 +15,34 @@
 			"when": 1766051408379,
 			"tag": "0001_outstanding_marrow",
 			"breakpoints": true
+		},
+		{
+			"idx": 2,
+			"version": "5",
+			"when": 1766405387594,
+			"tag": "0002_ancient_millenium_guard",
+			"breakpoints": true
+		},
+		{
+			"idx": 3,
+			"version": "5",
+			"when": 1766406953151,
+			"tag": "0003_mean_iron_monger",
+			"breakpoints": true
+		},
+		{
+			"idx": 4,
+			"version": "5",
+			"when": 1766407633254,
+			"tag": "0004_common_supernaut",
+			"breakpoints": true
+		},
+		{
+			"idx": 5,
+			"version": "5",
+			"when": 1767511647609,
+			"tag": "0005_wooden_black_cat",
+			"breakpoints": true
 		}
 	]
 }

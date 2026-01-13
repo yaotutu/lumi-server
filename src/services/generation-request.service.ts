@@ -10,10 +10,11 @@
 import { createId } from '@paralleldrive/cuid2';
 import { db } from '@/db/drizzle';
 import { generatedImages, generationRequests, imageGenerationJobs } from '@/db/schema';
-import { modelQueue } from '@/queues';
+import { imageQueue, modelQueue } from '@/queues';
 import {
 	generatedImageRepository,
 	generationRequestRepository,
+	imageJobRepository,
 	modelJobRepository,
 	modelRepository,
 	orphanedFileRepository,
@@ -21,6 +22,73 @@ import {
 import { NotFoundError, ValidationError } from '@/utils/errors';
 import { logger } from '@/utils/logger';
 import { storageService } from './storage.service.js';
+
+/**
+ * 生成友好的模型名称
+ *
+ * 命名规则：
+ * 1. 优先使用用户输入的 originalPrompt
+ * 2. 截取适当长度（中文约15个字符，英文约30个字符）
+ * 3. 添加时间戳后缀避免重复
+ * 4. 如果没有 prompt，使用默认名称
+ *
+ * @param originalPrompt 用户原始输入的提示词
+ * @returns 友好的模型名称
+ *
+ * @example
+ * generateModelName("一只可爱的小猫坐在草地上")
+ * // => "一只可爱的小猫坐在草地上"
+ *
+ * generateModelName("A cute cat sitting on the grass with a butterfly")
+ * // => "A cute cat sitting on the gr..."
+ *
+ * generateModelName(null)
+ * // => "我的模型 2025-01-04"
+ */
+function generateModelName(originalPrompt: string | null): string {
+	// 如果没有提示词，使用默认名称 + 日期
+	if (!originalPrompt || originalPrompt.trim().length === 0) {
+		const date = new Date().toLocaleDateString('zh-CN', {
+			year: 'numeric',
+			month: '2-digit',
+			day: '2-digit',
+		});
+		return `我的模型 ${date}`;
+	}
+
+	// 清理提示词（去除首尾空格、换行符等）
+	const cleanPrompt = originalPrompt.trim().replace(/\s+/g, ' ');
+
+	// 计算字符宽度（中文字符算2个宽度，其他算1个）
+	// 目标宽度：30（约15个中文字符或30个英文字符）
+	const maxWidth = 30;
+	let currentWidth = 0;
+	let endIndex = 0;
+
+	for (let i = 0; i < cleanPrompt.length; i = i + 1) {
+		const char = cleanPrompt[i];
+		// 判断是否为中文字符（包括中文标点）
+		const isChinese = /[\u4e00-\u9fa5\u3000-\u303f\uff00-\uffef]/.test(char);
+		const charWidth = isChinese ? 2 : 1;
+
+		if (currentWidth + charWidth > maxWidth) {
+			break;
+		}
+
+		currentWidth = currentWidth + charWidth;
+		endIndex = i + 1;
+	}
+
+	// 截取字符串
+	let modelName = cleanPrompt.substring(0, endIndex);
+
+	// 如果被截断，添加省略号（仅当原字符串更长时）
+	if (endIndex < cleanPrompt.length) {
+		modelName = `${modelName}...`;
+	}
+
+	return modelName;
+}
 
 /**
  * 获取生成请求列表
@@ -54,20 +122,22 @@ export async function getRequestById(requestId: string) {
 }
 
 /**
- * 创建新的生成请求
+ * 创建新的生成请求（快速返回版本）
  *
  * 使用数据库事务确保原子性：
- * - 1 个 GenerationRequest（无状态）
- * - 4 个 GeneratedImage（imageStatus=PENDING，imageUrl=null，imagePrompt=风格变体）
+ * - 1 个 GenerationRequest（只保存用户原始输入）
+ * - 4 个 GeneratedImage（imageStatus=PENDING，imageUrl=null，imagePrompt=null）
  * - 4 个 ImageGenerationJob（status=PENDING）
  *
+ * 注意：imagePrompt 初始为 null，后续由后台异步任务填充
+ *
  * @param userId 用户ID
- * @param prompt 文本提示词（已验证）
+ * @param originalPrompt 用户原始输入的提示词
  * @returns 创建的生成请求对象（包含关联的 Images 和 Jobs）
  * @throws ValidationError - 提示词验证失败
  */
-export async function createRequest(userId: string, prompt: string) {
-	const trimmedPrompt = prompt.trim();
+export async function createRequest(userId: string, originalPrompt: string) {
+	const trimmedPrompt = originalPrompt.trim();
 
 	// 验证提示词不为空
 	if (trimmedPrompt.length === 0) {
@@ -79,52 +149,25 @@ export async function createRequest(userId: string, prompt: string) {
 		throw new ValidationError('提示词长度不能超过500个字符');
 	}
 
-	// 🤖 生成 4 个不同风格的提示词变体
-	logger.info({
-		msg: '🎨 开始生成多风格提示词变体',
-		originalPrompt: trimmedPrompt,
-	});
-
-	let promptVariants: string[];
-	try {
-		const { generateMultiStylePrompts } = await import('./prompt-optimizer.service.js');
-		promptVariants = await generateMultiStylePrompts(trimmedPrompt);
-
-		logger.info({
-			msg: '✅ 提示词变体生成成功',
-			variantsCount: promptVariants.length,
-			variants: promptVariants,
-		});
-	} catch (error) {
-		// 降级策略：LLM 调用失败时，使用原始提示词的 4 个副本
-		logger.warn({
-			msg: '⚠️ 提示词变体生成失败，使用原始提示词',
-			error: error instanceof Error ? error.message : String(error),
-		});
-		promptVariants = [trimmedPrompt, trimmedPrompt, trimmedPrompt, trimmedPrompt];
-	}
-
 	// ✅ 使用数据库事务确保原子性
 	const requestId = createId();
 
 	await db.transaction(async (tx) => {
-		// 步骤 1: 创建 GenerationRequest
+		// 步骤 1: 创建 GenerationRequest（只保存用户原始输入）
 		await tx.insert(generationRequests).values({
 			id: requestId,
 			externalUserId: userId,
-			prompt: trimmedPrompt,
-			status: 'IMAGE_PENDING',
-			phase: 'IMAGE_GENERATION',
+			originalPrompt: trimmedPrompt, // ✅ 只保存用户原始输入
 		});
 
-		// 步骤 2: 创建 4 个 GeneratedImage 记录（每个使用不同的提示词变体）
+		// 步骤 2: 创建 4 个 GeneratedImage 记录（imagePrompt 初始为 null，后续异步填充）
 		const imageRecords = Array.from({ length: 4 }, (_, index) => ({
 			id: createId(),
 			requestId,
 			index,
 			imageStatus: 'PENDING' as const,
 			imageUrl: null,
-			imagePrompt: promptVariants[index], // ✅ 分配对应的提示词变体
+			imagePrompt: null, // ✅ 初始为 null，后续由后台任务填充
 		}));
 		await tx.insert(generatedImages).values(imageRecords);
 
@@ -139,18 +182,133 @@ export async function createRequest(userId: string, prompt: string) {
 		await tx.insert(imageGenerationJobs).values(jobRecords);
 
 		logger.info({
-			msg: '✅ 创建生成请求（事务）',
+			msg: '✅ 快速创建生成请求（事务）',
 			requestId,
 			imageIds: imageRecords.map((i) => i.id).join(','),
 			jobIds: jobRecords.map((j) => j.id).join(','),
-			promptVariantsAssigned: imageRecords.map(
-				(i, idx) => `[${idx}]: ${i.imagePrompt?.substring(0, 50)}...`,
-			),
+			note: 'imagePrompt 将由后台异步任务填充',
 		});
 	});
 
 	// 查询完整的生成请求对象（包含关联数据）
 	return getRequestById(requestId);
+}
+
+/**
+ * 异步处理：生成提示词变体并加入队列
+ *
+ * 业务流程:
+ * 1. 调用 LLM 生成 4 个提示词变体
+ * 2. 更新数据库中的 imagePrompt 字段
+ * 3. 将 4 个 ImageJob 加入 BullMQ 队列
+ * 4. 降级策略：LLM 失败时使用原始提示词
+ *
+ * @param requestId 生成请求 ID
+ * @param originalPrompt 用户原始输入的提示词
+ * @param userId 用户 ID
+ */
+export async function processPromptAndEnqueueJobs(
+	requestId: string,
+	originalPrompt: string,
+	userId: string,
+): Promise<void> {
+	try {
+		logger.info({
+			msg: '🎨 开始异步处理提示词生成和任务入队',
+			requestId,
+			originalPrompt,
+		});
+
+		// 步骤 1: 调用 LLM 生成 4 个提示词变体
+		let promptVariants: string[];
+		try {
+			const { processUserPromptForImageGeneration } = await import('./prompt-optimizer.service.js');
+			const result = await processUserPromptForImageGeneration(originalPrompt);
+			promptVariants = result.prompts;
+
+			logger.info({
+				msg: '✅ LLM 提示词生成成功',
+				requestId,
+				promptCount: promptVariants.length,
+			});
+		} catch (error) {
+			// 降级策略：LLM 失败时使用原始提示词
+			logger.warn({
+				msg: '⚠️ LLM 提示词生成失败，降级使用原始提示词',
+				requestId,
+				error,
+			});
+			promptVariants = [originalPrompt, originalPrompt, originalPrompt, originalPrompt];
+		}
+
+		// 步骤 2: 查询该请求的所有图片记录
+		const images = await generatedImageRepository.findByRequestId(requestId);
+		if (images.length !== 4) {
+			throw new Error(`期望 4 张图片记录，实际找到 ${images.length} 张`);
+		}
+
+		// 步骤 3: 更新每张图片的 imagePrompt 字段
+		await Promise.all(
+			images.map((image, index) =>
+				generatedImageRepository.update(image.id, {
+					imagePrompt: promptVariants[index],
+				}),
+			),
+		);
+
+		logger.info({
+			msg: '✅ 已更新所有图片的 imagePrompt',
+			requestId,
+			imageIds: images.map((img) => img.id).join(','),
+		});
+
+		// 步骤 4: 查询每张图片关联的 Job，并加入队列
+		const imageJobs = await Promise.all(
+			images.map(async (image, index) => {
+				// 查询该图片关联的 Job
+				const job = await imageJobRepository.findByImageId(image.id);
+				if (!job) {
+					throw new Error(`Image ${image.id} 没有关联的 Job`);
+				}
+
+				// 加入 BullMQ 队列
+				return imageQueue.add(`image-${image.id}`, {
+					jobId: job.id,
+					imageId: image.id,
+					prompt: promptVariants[index],
+					requestId,
+					userId,
+				});
+			}),
+		);
+
+		logger.info({
+			msg: '✅ 所有图片任务已加入队列',
+			requestId,
+			jobCount: imageJobs.length,
+			queueJobIds: imageJobs.map((j) => j.id).join(','),
+		});
+	} catch (error) {
+		logger.error({
+			msg: '❌ 异步处理失败',
+			requestId,
+			error,
+		});
+
+		// 错误处理：更新请求状态为失败
+		try {
+			await generationRequestRepository.update(requestId, {
+				status: 'FAILED',
+				phase: 'IMAGE_GENERATION',
+			});
+		} catch (updateError) {
+			logger.error({
+				msg: '❌ 更新失败状态时出错',
+				requestId,
+				error: updateError,
+			});
+		}
+	}
 }
 
 /**
@@ -223,7 +381,7 @@ export async function selectImageAndGenerateModel(requestId: string, selectedIma
 				id: modelId,
 				requestId,
 				externalUserId: request.externalUserId,
-				name: `模型-${requestId.substring(0, 8)}`,
+				name: generateModelName(request.originalPrompt),
 				previewImageUrl: selectedImage.imageUrl,
 				visibility: 'PUBLIC',
 				publishedAt: new Date(), // 默认公开，设置发布时间

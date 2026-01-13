@@ -1,7 +1,7 @@
 import { createId } from '@paralleldrive/cuid2';
 import { relations } from 'drizzle-orm';
 import { index, int, mysqlTable, timestamp, varchar } from 'drizzle-orm/mysql-core';
-import { generationRequests } from './generation-requests.js';
+import { generationRequests } from './generation-requests';
 
 /**
  * S3 孤儿文件表

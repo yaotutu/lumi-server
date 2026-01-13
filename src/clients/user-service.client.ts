@@ -61,15 +61,28 @@ export class UserServiceClient {
 
 			// 如果需要认证，添加 Token
 			if (requiresAuth && token) {
-				headers['Authorization'] = token; // token 已包含 "Bearer " 前缀
+				headers.Authorization = token; // token 已包含 "Bearer " 前缀
 			}
 
-			// 日志记录
+			// 解析请求体（如果有）
+			const requestBody = options.body ? JSON.parse(options.body as string) : null;
+
+			// 准备日志用的请求头（脱敏处理）
+			const loggableHeaders = { ...headers };
+			if (loggableHeaders.Authorization) {
+				// 只显示 Token 的前 20 个字符，避免泄露完整 Token
+				const token = loggableHeaders.Authorization;
+				loggableHeaders.Authorization = `${token.substring(0, 20)}...***`;
+			}
+
+			// 打印完整的请求报文
 			if (this.enableLogging) {
 				logger.info({
-					msg: '[UserServiceClient] 发送请求',
+					msg: '📤 [UserServiceClient] 发送请求',
 					url,
 					method: options.method || 'GET',
+					headers: loggableHeaders,
+					body: requestBody,
 					requiresAuth,
 				});
 			}
@@ -86,27 +99,78 @@ export class UserServiceClient {
 
 			clearTimeout(timeoutId);
 
-			// 解析响应
-			const data = (await response.json()) as { code: number; msg: string; data?: T };
+			// 解析响应体
+			const responseText = await response.text();
+			let responseBody: { code: number; msg: string; data?: T };
 
-			// 日志记录
-			if (this.enableLogging) {
-				logger.info({
-					msg: '[UserServiceClient] 收到响应',
+			try {
+				responseBody = JSON.parse(responseText) as { code: number; msg: string; data?: T };
+			} catch (parseError) {
+				// 如果解析失败，记录原始响应文本
+				logger.error({
+					msg: '❌ [UserServiceClient] 响应 JSON 解析失败',
 					url,
-					code: data.code,
-					success: data.code === 200,
+					statusCode: response.status,
+					statusText: response.statusText,
+					responseText,
+					parseError: parseError instanceof Error ? parseError.message : String(parseError),
 				});
+				throw new Error(`Failed to parse JSON response: ${responseText}`);
 			}
 
-			return data;
+			// 打印完整的响应报文
+			if (this.enableLogging) {
+				// 判断是否成功（业务层面）
+				const isSuccess = responseBody.code === 200;
+
+				// 如果业务失败，使用 error 级别日志
+				if (!isSuccess) {
+					logger.error({
+						msg: '❌ [UserServiceClient] 业务错误响应',
+						url,
+						httpStatusCode: response.status,
+						httpStatusText: response.statusText,
+						businessCode: responseBody.code,
+						businessMsg: responseBody.msg,
+						responseHeaders: Object.fromEntries(response.headers.entries()),
+						responseBody,
+					});
+				} else {
+					logger.info({
+						msg: '📥 [UserServiceClient] 收到响应',
+						url,
+						httpStatusCode: response.status,
+						httpStatusText: response.statusText,
+						businessCode: responseBody.code,
+						businessMsg: responseBody.msg,
+						responseHeaders: Object.fromEntries(response.headers.entries()),
+						responseBody,
+					});
+				}
+			}
+
+			// 检查 HTTP 状态码（与业务状态码不同）
+			if (!response.ok) {
+				logger.error({
+					msg: '❌ [UserServiceClient] HTTP 错误响应',
+					url,
+					statusCode: response.status,
+					statusText: response.statusText,
+					body: responseBody,
+				});
+				// 注意：即使 HTTP 状态码不是 2xx，仍然返回解析后的响应体
+				// 因为外部服务可能使用 400 等状态码返回业务错误信息
+			}
+
+			return responseBody;
 		} catch (error) {
 			// 错误日志
 			if (this.enableLogging) {
 				logger.error({
-					msg: '[UserServiceClient] 请求失败',
+					msg: '❌ [UserServiceClient] 请求失败',
 					endpoint,
 					error: error instanceof Error ? error.message : String(error),
+					stack: error instanceof Error ? error.stack : undefined,
 				});
 			}
 
@@ -260,6 +324,130 @@ export class UserServiceClient {
 			{
 				method: 'POST',
 				body: JSON.stringify({}),
+			},
+			true, // 需要认证
+			token,
+		);
+	}
+
+	// ============================================
+	// 获取指定用户信息 API
+	// ============================================
+
+	/**
+	 * 获取指定用户信息
+	 *
+	 * @param userId 用户ID
+	 * @param token 认证 Token（必须包含 "Bearer " 前缀）
+	 * @returns 成功时返回用户信息
+	 *
+	 * @example
+	 * ```typescript
+	 * const response = await userServiceClient.getUserById('123', token);
+	 * if (response.code === 200) {
+	 *   const user = response.data;
+	 *   console.log(`用户名: ${user.user_name}, 昵称: ${user.nick_name}`);
+	 * }
+	 * ```
+	 */
+	async getUserById(
+		userId: string,
+		token: string,
+	): Promise<{ code: number; msg: string; data?: UserInfoData }> {
+		return this.request<UserInfoData>(
+			`/api/v1.0/${userId}`,
+			{
+				method: 'GET',
+			},
+			true, // 需要认证
+			token,
+		);
+	}
+
+	// ============================================
+	// 更新用户信息 API
+	// ============================================
+
+	/**
+	 * 更新用户信息
+	 *
+	 * @param userId 用户ID
+	 * @param updateData 更新数据（昵称、头像、性别）
+	 * @param token 认证 Token（必须包含 "Bearer " 前缀）
+	 * @returns 成功或失败结果
+	 *
+	 * @example
+	 * ```typescript
+	 * await userServiceClient.updateUser('123', {
+	 *   nick_name: '新昵称',
+	 *   avatar: 'base64...',
+	 *   gender: '男'
+	 * }, token);
+	 * ```
+	 */
+	async updateUser(
+		userId: string,
+		updateData: {
+			nick_name?: string;
+			avatar?: string;
+			gender?: string;
+		},
+		token: string,
+	): Promise<{ code: number; msg: string }> {
+		return this.request<undefined>(
+			'/api/v1.0/update',
+			{
+				method: 'POST',
+				body: JSON.stringify({
+					id: userId,
+					...updateData,
+				}),
+			},
+			true, // 需要认证
+			token,
+		);
+	}
+
+	// ============================================
+	// 修改密码 API
+	// ============================================
+
+	/**
+	 * 修改密码
+	 *
+	 * @param userId 用户ID
+	 * @param passwordData 密码数据
+	 * @param token 认证 Token（必须包含 "Bearer " 前缀）
+	 * @returns 成功或失败结果
+	 *
+	 * @example
+	 * ```typescript
+	 * await userServiceClient.modifyPassword('123', {
+	 *   old_password: '旧密码',  // 可选
+	 *   new_password: '新密码',
+	 *   repassword: '新密码',
+	 *   random_code: 'ABC123'
+	 * }, token);
+	 * ```
+	 */
+	async modifyPassword(
+		userId: string,
+		passwordData: {
+			old_password?: string;
+			new_password: string;
+			repassword: string;
+			random_code: string;
+		},
+		token: string,
+	): Promise<{ code: number; msg: string }> {
+		return this.request<undefined>(
+			'/api/v1.0/modify_password',
+			{
+				method: 'POST',
+				body: JSON.stringify({
+					id: userId,
+					...passwordData,
+				}),
 			},
 			true, // 需要认证
 			token,

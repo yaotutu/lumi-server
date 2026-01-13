@@ -56,3 +56,4 @@ pids/
 # Claude Code
 .claude/
 CLAUDE.md
+.env.remote

@@ -46,11 +46,12 @@ const envSchema = z.object({
 	// 阿里云文生图
 	ALIYUN_IMAGE_API_KEY: z.string().optional(),
 	ALIYUN_IMAGE_API_ENDPOINT: z.string().optional(),
+	ALIYUN_IMAGE_MODEL: z.string().default('qwen-image-plus'),
 
 	// 阿里云 LLM
-	QWEN_API_KEY: z.string().optional(),
-	QWEN_BASE_URL: z.string().optional(),
-	QWEN_MODEL: z.string().default('qwen-plus'),
+	QWEN_LLM_API_KEY: z.string().optional(),
+	QWEN_LLM_BASE_URL: z.string().optional(),
+	QWEN_LLM_MODEL: z.string().default('qwen-plus'),
 
 	// 腾讯云图生3D
 	TENCENTCLOUD_SECRET_ID: z.string().optional(),
@@ -82,6 +83,9 @@ const envSchema = z.object({
 
 	// 用户服务配置
 	USER_SERVICE_URL: z.string().default('http://user.ai3d.top'),
+
+	// 切片服务配置
+	SLICER_SERVICE_URL: z.string().url().default('http://localhost:8010'),
 });
 
 const parseResult = envSchema.safeParse(process.env);
@@ -135,12 +139,13 @@ export const config = {
 			image: {
 				apiKey: env.ALIYUN_IMAGE_API_KEY,
 				endpoint: env.ALIYUN_IMAGE_API_ENDPOINT,
+				model: env.ALIYUN_IMAGE_MODEL,
 			},
 		},
 		qwen: {
-			apiKey: env.QWEN_API_KEY,
-			baseUrl: env.QWEN_BASE_URL,
-			model: env.QWEN_MODEL,
+			apiKey: env.QWEN_LLM_API_KEY,
+			baseUrl: env.QWEN_LLM_BASE_URL,
+			model: env.QWEN_LLM_MODEL,
 		},
 		tencent: {
 			secretId: env.TENCENTCLOUD_SECRET_ID,
@@ -175,6 +180,12 @@ export const config = {
 	// 用户服务配置
 	userService: {
 		url: env.USER_SERVICE_URL,
+	},
+
+	// 切片服务配置
+	slicerService: {
+		url: env.SLICER_SERVICE_URL,
+		timeout: 30000, // HTTP 请求超时时间（30秒）
 	},
 } as const;
 

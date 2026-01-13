@@ -1,9 +1,9 @@
 import { createId } from '@paralleldrive/cuid2';
 import { relations } from 'drizzle-orm';
-import { index, int, mysqlTable, text, timestamp, varchar } from 'drizzle-orm/mysql-core';
-import { modelSourceEnum, modelVisibilityEnum, printStatusEnum } from './enums.js';
-import { generatedImages } from './generated-images.js';
-import { generationRequests } from './generation-requests.js';
+import { index, int, json, mysqlTable, text, timestamp, varchar } from 'drizzle-orm/mysql-core';
+import { modelSourceEnum, modelVisibilityEnum, printStatusEnum, sliceStatusEnum } from './enums';
+import { generatedImages } from './generated-images';
+import { generationRequests } from './generation-requests';
 
 /**
  * 模型表（统一管理 AI 生成和用户上传）
@@ -45,9 +45,14 @@ export const models = mysqlTable(
 		favoriteCount: int('favorite_count').notNull().default(0),
 		downloadCount: int('download_count').notNull().default(0),
 
+		// 切片相关（独立于打印状态）
+		sliceTaskId: varchar('slice_task_id', { length: 100 }), // 外部切片服务返回的任务 ID
+		sliceStatus: sliceStatusEnum, // 切片状态：PENDING / PROCESSING / COMPLETED / FAILED
+		gcodeUrl: varchar('gcode_url', { length: 500 }), // G-code 文件下载 URL
+		gcodeMetadata: json('gcode_metadata'), // G-code 元数据（层高、打印时间、耗材等）
+
 		// 打印相关
-		sliceTaskId: varchar('slice_task_id', { length: 100 }),
-		printStatus: printStatusEnum.default('NOT_STARTED'),
+		printStatus: printStatusEnum.default('NOT_STARTED'), // 打印状态（整个打印流程）
 
 		// 时间戳
 		createdAt: timestamp('created_at').notNull().defaultNow(),
@@ -89,5 +94,5 @@ export type Model = typeof models.$inferSelect;
 export type NewModel = typeof models.$inferInsert;
 
 // 导入循环依赖
-import { modelGenerationJobs } from './model-generation-jobs.js';
-import { modelInteractions } from './model-interactions.js';
+import { modelGenerationJobs } from './model-generation-jobs';
+import { modelInteractions } from './model-interactions';

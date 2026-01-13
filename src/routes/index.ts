@@ -6,7 +6,9 @@ import { authRoutes } from './auth.route.js';
 import { galleryModelRoutes } from './gallery-models.route.js';
 import { healthRoutes } from './health.route.js';
 import { interactionRoutes } from './interactions.route.js';
+import { modelRoutes } from './models.route.js';
 import { proxyRoutes } from './proxy.route.js';
+import { slicesRoutes } from './slices.route.js'; // ✅ 新增：切片路由
 import { taskRoutes } from './tasks.route.js';
 import { userRoutes } from './user.route.js';
 import { workerRoutes } from './workers.route.js';
@@ -31,6 +33,8 @@ export async function routes(fastify: FastifyInstance) {
 	await fastify.register(taskRoutes);
 	await fastify.register(galleryModelRoutes);
 	await fastify.register(interactionRoutes);
+	await fastify.register(modelRoutes); // ✅ 新增：模型管理路由
+	await fastify.register(slicesRoutes); // ✅ 新增：切片路由
 
 	// Worker 状态路由
 	await fastify.register(workerRoutes);

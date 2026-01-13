@@ -1,0 +1,1033 @@
+{
+	"version": "5",
+	"dialect": "mysql",
+	"id": "006596ef-f93f-40cd-b6b0-836ed9f7e226",
+	"prevId": "92024ded-0e33-4f80-82dc-a7f622d00808",
+	"tables": {
+		"email_verification_codes": {
+			"name": "email_verification_codes",
+			"columns": {
+				"id": {
+					"name": "id",
+					"type": "varchar(36)",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"email": {
+					"name": "email",
+					"type": "varchar(255)",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"code": {
+					"name": "code",
+					"type": "varchar(10)",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"expires_at": {
+					"name": "expires_at",
+					"type": "timestamp",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"verified_at": {
+					"name": "verified_at",
+					"type": "timestamp",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"external_user_id": {
+					"name": "external_user_id",
+					"type": "varchar(36)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"created_at": {
+					"name": "created_at",
+					"type": "timestamp",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": "(now())"
+				}
+			},
+			"indexes": {
+				"email_created_at_idx": {
+					"name": "email_created_at_idx",
+					"columns": ["email", "created_at"],
+					"isUnique": false
+				},
+				"email_expires_at_idx": {
+					"name": "email_expires_at_idx",
+					"columns": ["email", "expires_at"],
+					"isUnique": false
+				}
+			},
+			"foreignKeys": {},
+			"compositePrimaryKeys": {
+				"email_verification_codes_id": {
+					"name": "email_verification_codes_id",
+					"columns": ["id"]
+				}
+			},
+			"uniqueConstraints": {},
+			"checkConstraint": {}
+		},
+		"generated_images": {
+			"name": "generated_images",
+			"columns": {
+				"id": {
+					"name": "id",
+					"type": "varchar(36)",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"request_id": {
+					"name": "request_id",
+					"type": "varchar(36)",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"index": {
+					"name": "index",
+					"type": "int",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"image_url": {
+					"name": "image_url",
+					"type": "varchar(500)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"image_prompt": {
+					"name": "image_prompt",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"image_status": {
+					"name": "image_status",
+					"type": "enum('PENDING','GENERATING','COMPLETED','FAILED')",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": "'PENDING'"
+				},
+				"created_at": {
+					"name": "created_at",
+					"type": "timestamp",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": "(now())"
+				},
+				"completed_at": {
+					"name": "completed_at",
+					"type": "timestamp",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"failed_at": {
+					"name": "failed_at",
+					"type": "timestamp",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"error_message": {
+					"name": "error_message",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				}
+			},
+			"indexes": {
+				"request_id_idx": {
+					"name": "request_id_idx",
+					"columns": ["request_id"],
+					"isUnique": false
+				},
+				"image_status_idx": {
+					"name": "image_status_idx",
+					"columns": ["image_status"],
+					"isUnique": false
+				}
+			},
+			"foreignKeys": {},
+			"compositePrimaryKeys": {
+				"generated_images_id": {
+					"name": "generated_images_id",
+					"columns": ["id"]
+				}
+			},
+			"uniqueConstraints": {
+				"request_id_index_unique": {
+					"name": "request_id_index_unique",
+					"columns": ["request_id", "index"]
+				}
+			},
+			"checkConstraint": {}
+		},
+		"generation_requests": {
+			"name": "generation_requests",
+			"columns": {
+				"id": {
+					"name": "id",
+					"type": "varchar(36)",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"external_user_id": {
+					"name": "external_user_id",
+					"type": "varchar(36)",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"original_prompt": {
+					"name": "original_prompt",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"request_status": {
+					"name": "request_status",
+					"type": "enum('IMAGE_PENDING','IMAGE_GENERATING','IMAGE_COMPLETED','IMAGE_FAILED','MODEL_PENDING','MODEL_GENERATING','MODEL_COMPLETED','MODEL_FAILED','COMPLETED','FAILED','CANCELLED')",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": "'IMAGE_PENDING'"
+				},
+				"request_phase": {
+					"name": "request_phase",
+					"type": "enum('IMAGE_GENERATION','AWAITING_SELECTION','MODEL_GENERATION','COMPLETED')",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": "'IMAGE_GENERATION'"
+				},
+				"selected_image_index": {
+					"name": "selected_image_index",
+					"type": "int",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"created_at": {
+					"name": "created_at",
+					"type": "timestamp",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": "(now())"
+				},
+				"updated_at": {
+					"name": "updated_at",
+					"type": "timestamp",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": "(now())"
+				},
+				"completed_at": {
+					"name": "completed_at",
+					"type": "timestamp",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				}
+			},
+			"indexes": {
+				"external_user_id_created_at_idx": {
+					"name": "external_user_id_created_at_idx",
+					"columns": ["external_user_id", "created_at"],
+					"isUnique": false
+				},
+				"status_phase_idx": {
+					"name": "status_phase_idx",
+					"columns": ["request_status", "request_phase"],
+					"isUnique": false
+				}
+			},
+			"foreignKeys": {},
+			"compositePrimaryKeys": {
+				"generation_requests_id": {
+					"name": "generation_requests_id",
+					"columns": ["id"]
+				}
+			},
+			"uniqueConstraints": {},
+			"checkConstraint": {}
+		},
+		"image_generation_jobs": {
+			"name": "image_generation_jobs",
+			"columns": {
+				"id": {
+					"name": "id",
+					"type": "varchar(36)",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"image_id": {
+					"name": "image_id",
+					"type": "varchar(36)",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"job_status": {
+					"name": "job_status",
+					"type": "enum('PENDING','RUNNING','RETRYING','COMPLETED','FAILED','CANCELLED','TIMEOUT')",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": "'PENDING'"
+				},
+				"priority": {
+					"name": "priority",
+					"type": "int",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": 0
+				},
+				"retry_count": {
+					"name": "retry_count",
+					"type": "int",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": 0
+				},
+				"max_retries": {
+					"name": "max_retries",
+					"type": "int",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": 3
+				},
+				"next_retry_at": {
+					"name": "next_retry_at",
+					"type": "timestamp",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"timeout_at": {
+					"name": "timeout_at",
+					"type": "timestamp",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"provider_name": {
+					"name": "provider_name",
+					"type": "varchar(50)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"provider_job_id": {
+					"name": "provider_job_id",
+					"type": "varchar(255)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"created_at": {
+					"name": "created_at",
+					"type": "timestamp",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": "(now())"
+				},
+				"updated_at": {
+					"name": "updated_at",
+					"type": "timestamp",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": "(now())"
+				},
+				"started_at": {
+					"name": "started_at",
+					"type": "timestamp",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"completed_at": {
+					"name": "completed_at",
+					"type": "timestamp",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"failed_at": {
+					"name": "failed_at",
+					"type": "timestamp",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"error_message": {
+					"name": "error_message",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"error_code": {
+					"name": "error_code",
+					"type": "varchar(50)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"execution_duration": {
+					"name": "execution_duration",
+					"type": "int",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				}
+			},
+			"indexes": {
+				"status_priority_created_at_idx": {
+					"name": "status_priority_created_at_idx",
+					"columns": ["job_status", "priority", "created_at"],
+					"isUnique": false
+				},
+				"status_next_retry_at_idx": {
+					"name": "status_next_retry_at_idx",
+					"columns": ["job_status", "next_retry_at"],
+					"isUnique": false
+				}
+			},
+			"foreignKeys": {},
+			"compositePrimaryKeys": {
+				"image_generation_jobs_id": {
+					"name": "image_generation_jobs_id",
+					"columns": ["id"]
+				}
+			},
+			"uniqueConstraints": {
+				"image_generation_jobs_image_id_unique": {
+					"name": "image_generation_jobs_image_id_unique",
+					"columns": ["image_id"]
+				}
+			},
+			"checkConstraint": {}
+		},
+		"model_generation_jobs": {
+			"name": "model_generation_jobs",
+			"columns": {
+				"id": {
+					"name": "id",
+					"type": "varchar(36)",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"model_id": {
+					"name": "model_id",
+					"type": "varchar(36)",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"job_status": {
+					"name": "job_status",
+					"type": "enum('PENDING','RUNNING','RETRYING','COMPLETED','FAILED','CANCELLED','TIMEOUT')",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": "'PENDING'"
+				},
+				"priority": {
+					"name": "priority",
+					"type": "int",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": 0
+				},
+				"progress": {
+					"name": "progress",
+					"type": "int",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": 0
+				},
+				"retry_count": {
+					"name": "retry_count",
+					"type": "int",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": 0
+				},
+				"max_retries": {
+					"name": "max_retries",
+					"type": "int",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": 3
+				},
+				"next_retry_at": {
+					"name": "next_retry_at",
+					"type": "timestamp",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"timeout_at": {
+					"name": "timeout_at",
+					"type": "timestamp",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"provider_name": {
+					"name": "provider_name",
+					"type": "varchar(50)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"provider_job_id": {
+					"name": "provider_job_id",
+					"type": "varchar(255)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"created_at": {
+					"name": "created_at",
+					"type": "timestamp",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": "(now())"
+				},
+				"updated_at": {
+					"name": "updated_at",
+					"type": "timestamp",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": "(now())"
+				},
+				"started_at": {
+					"name": "started_at",
+					"type": "timestamp",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"completed_at": {
+					"name": "completed_at",
+					"type": "timestamp",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"failed_at": {
+					"name": "failed_at",
+					"type": "timestamp",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"error_message": {
+					"name": "error_message",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"error_code": {
+					"name": "error_code",
+					"type": "varchar(50)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"execution_duration": {
+					"name": "execution_duration",
+					"type": "int",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				}
+			},
+			"indexes": {
+				"status_priority_created_at_idx": {
+					"name": "status_priority_created_at_idx",
+					"columns": ["job_status", "priority", "created_at"],
+					"isUnique": false
+				},
+				"status_next_retry_at_idx": {
+					"name": "status_next_retry_at_idx",
+					"columns": ["job_status", "next_retry_at"],
+					"isUnique": false
+				}
+			},
+			"foreignKeys": {},
+			"compositePrimaryKeys": {
+				"model_generation_jobs_id": {
+					"name": "model_generation_jobs_id",
+					"columns": ["id"]
+				}
+			},
+			"uniqueConstraints": {
+				"model_generation_jobs_model_id_unique": {
+					"name": "model_generation_jobs_model_id_unique",
+					"columns": ["model_id"]
+				}
+			},
+			"checkConstraint": {}
+		},
+		"model_interactions": {
+			"name": "model_interactions",
+			"columns": {
+				"id": {
+					"name": "id",
+					"type": "varchar(36)",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"external_user_id": {
+					"name": "external_user_id",
+					"type": "varchar(36)",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"model_id": {
+					"name": "model_id",
+					"type": "varchar(36)",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"interaction_type": {
+					"name": "interaction_type",
+					"type": "enum('LIKE','FAVORITE')",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"created_at": {
+					"name": "created_at",
+					"type": "timestamp",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": "(now())"
+				}
+			},
+			"indexes": {
+				"external_user_id_type_created_at_idx": {
+					"name": "external_user_id_type_created_at_idx",
+					"columns": ["external_user_id", "interaction_type", "created_at"],
+					"isUnique": false
+				},
+				"model_id_type_idx": {
+					"name": "model_id_type_idx",
+					"columns": ["model_id", "interaction_type"],
+					"isUnique": false
+				}
+			},
+			"foreignKeys": {},
+			"compositePrimaryKeys": {
+				"model_interactions_id": {
+					"name": "model_interactions_id",
+					"columns": ["id"]
+				}
+			},
+			"uniqueConstraints": {
+				"external_user_id_model_id_type_unique": {
+					"name": "external_user_id_model_id_type_unique",
+					"columns": ["external_user_id", "model_id", "interaction_type"]
+				}
+			},
+			"checkConstraint": {}
+		},
+		"models": {
+			"name": "models",
+			"columns": {
+				"id": {
+					"name": "id",
+					"type": "varchar(36)",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"external_user_id": {
+					"name": "external_user_id",
+					"type": "varchar(36)",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"model_source": {
+					"name": "model_source",
+					"type": "enum('AI_GENERATED','USER_UPLOADED')",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": "'AI_GENERATED'"
+				},
+				"request_id": {
+					"name": "request_id",
+					"type": "varchar(36)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"source_image_id": {
+					"name": "source_image_id",
+					"type": "varchar(36)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"name": {
+					"name": "name",
+					"type": "varchar(255)",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"description": {
+					"name": "description",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"model_url": {
+					"name": "model_url",
+					"type": "varchar(500)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"mtl_url": {
+					"name": "mtl_url",
+					"type": "varchar(500)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"texture_url": {
+					"name": "texture_url",
+					"type": "varchar(500)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"preview_image_url": {
+					"name": "preview_image_url",
+					"type": "varchar(500)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"format": {
+					"name": "format",
+					"type": "varchar(20)",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": "'OBJ'"
+				},
+				"file_size": {
+					"name": "file_size",
+					"type": "int",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"model_visibility": {
+					"name": "model_visibility",
+					"type": "enum('PRIVATE','PUBLIC')",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": "'PRIVATE'"
+				},
+				"published_at": {
+					"name": "published_at",
+					"type": "timestamp",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"view_count": {
+					"name": "view_count",
+					"type": "int",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": 0
+				},
+				"like_count": {
+					"name": "like_count",
+					"type": "int",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": 0
+				},
+				"favorite_count": {
+					"name": "favorite_count",
+					"type": "int",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": 0
+				},
+				"download_count": {
+					"name": "download_count",
+					"type": "int",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": 0
+				},
+				"slice_task_id": {
+					"name": "slice_task_id",
+					"type": "varchar(100)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"slice_status": {
+					"name": "slice_status",
+					"type": "enum('PENDING','PROCESSING','COMPLETED','FAILED')",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"gcode_url": {
+					"name": "gcode_url",
+					"type": "varchar(500)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"gcode_metadata": {
+					"name": "gcode_metadata",
+					"type": "json",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"print_status": {
+					"name": "print_status",
+					"type": "enum('NOT_STARTED','SLICING','SLICE_COMPLETE','PRINTING','PRINT_COMPLETE','FAILED')",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false,
+					"default": "'NOT_STARTED'"
+				},
+				"created_at": {
+					"name": "created_at",
+					"type": "timestamp",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": "(now())"
+				},
+				"updated_at": {
+					"name": "updated_at",
+					"type": "timestamp",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": "(now())"
+				},
+				"completed_at": {
+					"name": "completed_at",
+					"type": "timestamp",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"failed_at": {
+					"name": "failed_at",
+					"type": "timestamp",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"error_message": {
+					"name": "error_message",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				}
+			},
+			"indexes": {
+				"external_user_id_created_at_idx": {
+					"name": "external_user_id_created_at_idx",
+					"columns": ["external_user_id", "created_at"],
+					"isUnique": false
+				},
+				"source_idx": {
+					"name": "source_idx",
+					"columns": ["model_source"],
+					"isUnique": false
+				},
+				"visibility_published_at_idx": {
+					"name": "visibility_published_at_idx",
+					"columns": ["model_visibility", "published_at"],
+					"isUnique": false
+				},
+				"visibility_like_count_idx": {
+					"name": "visibility_like_count_idx",
+					"columns": ["model_visibility", "like_count"],
+					"isUnique": false
+				},
+				"request_id_idx": {
+					"name": "request_id_idx",
+					"columns": ["request_id"],
+					"isUnique": false
+				},
+				"source_image_id_idx": {
+					"name": "source_image_id_idx",
+					"columns": ["source_image_id"],
+					"isUnique": false
+				}
+			},
+			"foreignKeys": {},
+			"compositePrimaryKeys": {
+				"models_id": {
+					"name": "models_id",
+					"columns": ["id"]
+				}
+			},
+			"uniqueConstraints": {},
+			"checkConstraint": {}
+		},
+		"orphaned_files": {
+			"name": "orphaned_files",
+			"columns": {
+				"id": {
+					"name": "id",
+					"type": "varchar(36)",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"s3_key": {
+					"name": "s3_key",
+					"type": "varchar(500)",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"request_id": {
+					"name": "request_id",
+					"type": "varchar(36)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"retry_count": {
+					"name": "retry_count",
+					"type": "int",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": 0
+				},
+				"status": {
+					"name": "status",
+					"type": "varchar(20)",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": "'pending'"
+				},
+				"created_at": {
+					"name": "created_at",
+					"type": "timestamp",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": "(now())"
+				},
+				"last_retry_at": {
+					"name": "last_retry_at",
+					"type": "timestamp",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				}
+			},
+			"indexes": {
+				"status_retry_count_idx": {
+					"name": "status_retry_count_idx",
+					"columns": ["status", "retry_count"],
+					"isUnique": false
+				},
+				"created_at_idx": {
+					"name": "created_at_idx",
+					"columns": ["created_at"],
+					"isUnique": false
+				},
+				"request_id_idx": {
+					"name": "request_id_idx",
+					"columns": ["request_id"],
+					"isUnique": false
+				}
+			},
+			"foreignKeys": {},
+			"compositePrimaryKeys": {
+				"orphaned_files_id": {
+					"name": "orphaned_files_id",
+					"columns": ["id"]
+				}
+			},
+			"uniqueConstraints": {},
+			"checkConstraint": {}
+		}
+	},
+	"views": {},
+	"_meta": {
+		"schemas": {},
+		"tables": {},
+		"columns": {}
+	},
+	"internal": {
+		"tables": {},
+		"indexes": {}
+	}
+}

@@ -18,6 +18,14 @@
 import type { FastifyInstance } from 'fastify';
 import { getUserServiceClient } from '@/clients/user-service.client';
 import config from '@/config/index';
+import {
+	getMeSchema,
+	loginSchema,
+	logoutSchema,
+	registerSchema,
+	sendCodeSchema,
+} from '@/schemas/auth.schema';
+import { UserStatsService } from '@/services';
 import { logger } from '@/utils/logger';
 import { fail, success } from '@/utils/response';
 
@@ -34,20 +42,8 @@ export async function authRoutes(fastify: FastifyInstance) {
 	/**
 	 * POST /api/auth/send-code
 	 * 发送邮箱验证码
-	 *
-	 * 请求体：
-	 * {
-	 *   "email": "user@example.com",
-	 *   "type": "login" | "register" | "modify_password"
-	 * }
-	 *
-	 * 响应格式：
-	 * {
-	 *   "status": "success",
-	 *   "data": null
-	 * }
 	 */
-	fastify.post('/api/auth/send-code', async (request, reply) => {
+	fastify.post('/api/auth/send-code', { schema: sendCodeSchema }, async (request, reply) => {
 		try {
 			const { email, type } = request.body as {
 				email: string;
@@ -61,30 +57,20 @@ export async function authRoutes(fastify: FastifyInstance) {
 				return reply.send(success(null));
 			}
 
-			return reply.send(fail(response.msg || '发送验证码失败'));
+			// 发送验证码失败，返回 400 状态码
+			return reply.status(400).send(fail(response.msg || '发送验证码失败'));
 		} catch (error) {
 			logger.error({ msg: '发送验证码失败', error });
-			return reply.send(fail('发送验证码失败'));
+			// 服务器内部错误，返回 500 状态码
+			return reply.status(500).send(fail('发送验证码失败'));
 		}
 	});
 
 	/**
 	 * POST /api/auth/register
 	 * 用户注册
-	 *
-	 * 请求体：
-	 * {
-	 *   "email": "user@example.com",
-	 *   "code": "ABC123"
-	 * }
-	 *
-	 * 响应格式：
-	 * {
-	 *   "status": "success",
-	 *   "data": null
-	 * }
 	 */
-	fastify.post('/api/auth/register', async (request, reply) => {
+	fastify.post('/api/auth/register', { schema: registerSchema }, async (request, reply) => {
 		try {
 			const { email, code } = request.body as {
 				email: string;
@@ -98,32 +84,20 @@ export async function authRoutes(fastify: FastifyInstance) {
 				return reply.send(success(null));
 			}
 
-			return reply.send(fail(response.msg || '注册失败'));
+			// 注册失败，返回 400 状态码
+			return reply.status(400).send(fail(response.msg || '注册失败'));
 		} catch (error) {
 			logger.error({ msg: '用户注册失败', error });
-			return reply.send(fail('注册失败'));
+			// 服务器内部错误，返回 500 状态码
+			return reply.status(500).send(fail('注册失败'));
 		}
 	});
 
 	/**
 	 * POST /api/auth/login
-	 * 用户登录（验证码方式）
-	 *
-	 * 请求体：
-	 * {
-	 *   "email": "user@example.com",
-	 *   "code": "ABC123"
-	 * }
-	 *
-	 * 响应格式：
-	 * {
-	 *   "status": "success",
-	 *   "data": {
-	 *     "token": "Bearer eyJhbGc..."
-	 *   }
-	 * }
+	 * 用户登录
 	 */
-	fastify.post('/api/auth/login', async (request, reply) => {
+	fastify.post('/api/auth/login', { schema: loginSchema }, async (request, reply) => {
 		try {
 			const { email, code } = request.body as {
 				email: string;
@@ -141,34 +115,20 @@ export async function authRoutes(fastify: FastifyInstance) {
 				);
 			}
 
-			return reply.send(fail(response.msg || '登录失败'));
+			// 登录失败，返回 401 状态码
+			return reply.status(401).send(fail(response.msg || '登录失败'));
 		} catch (error) {
 			logger.error({ msg: '用户登录失败', error });
-			return reply.send(fail('登录失败'));
+			// 服务器内部错误，返回 500 状态码
+			return reply.status(500).send(fail('登录失败'));
 		}
 	});
 
 	/**
 	 * GET /api/auth/me
-	 * 获取当前用户信息
-	 *
-	 * 响应格式：
-	 * {
-	 *   "status": "success",
-	 *   "data": {
-	 *     "status": "authenticated" | "unauthenticated" | "error",
-	 *     "user": {
-	 *       "id": "external_user_id",
-	 *       "email": "...",
-	 *       "userName": "...",
-	 *       "nickName": "...",
-	 *       "avatar": "...",
-	 *       "gender": "..."
-	 *     } | null
-	 *   }
-	 * }
+	 * 获取当前用户信息（包含统计数据）
 	 */
-	fastify.get('/api/auth/me', async (request, reply) => {
+	fastify.get('/api/auth/me', { schema: getMeSchema }, async (request, reply) => {
 		try {
 			// 从 Authorization header 获取 Token
 			const authHeader = request.headers.authorization;
@@ -185,17 +145,60 @@ export async function authRoutes(fastify: FastifyInstance) {
 			const response = await userClient.getUserInfo(authHeader);
 
 			if (response.code === 200 && response.data) {
+				// 构建 user 对象，只包含必需字段
+				const userData: Record<string, any> = {
+					id: response.data.user_id,
+					userName: response.data.user_name,
+					nickName: response.data.nick_name,
+				};
+
+				// 添加可选字段（仅在存在时）
+				if (response.data.email) {
+					userData.email = response.data.email;
+				}
+				if (response.data.avatar !== undefined) {
+					userData.avatar = response.data.avatar || null;
+				}
+				if (response.data.gender) {
+					userData.gender = response.data.gender;
+				}
+
+				// 获取用户统计数据
+				// 如果统计数据查询失败，使用默认值（全部为 0）
+				let stats = null;
+				try {
+					stats = await UserStatsService.getUserStats(response.data.user_id);
+				} catch (statsError) {
+					// 统计数据查询失败时，记录警告日志，但不影响用户基本信息的返回
+					logger.warn({
+						msg: '获取用户统计数据失败，使用默认值',
+						userId: response.data.user_id,
+						error: statsError,
+					});
+					// 使用默认统计数据（全部为 0）
+					stats = {
+						totalModels: 0,
+						publicModels: 0,
+						privateModels: 0,
+						totalLikes: 0,
+						totalFavorites: 0,
+						totalViews: 0,
+						totalDownloads: 0,
+						likedModelsCount: 0,
+						favoritedModelsCount: 0,
+						totalRequests: 0,
+						completedRequests: 0,
+						failedRequests: 0,
+					};
+				}
+
+				// 将统计数据添加到用户对象中
+				userData.stats = stats;
+
 				return reply.send(
 					success({
 						status: 'authenticated',
-						user: {
-							id: response.data.user_id,
-							email: response.data.email,
-							userName: response.data.user_name,
-							nickName: response.data.nick_name,
-							avatar: response.data.avatar,
-							gender: response.data.gender,
-						},
+						user: userData,
 					}),
 				);
 			}
@@ -208,6 +211,8 @@ export async function authRoutes(fastify: FastifyInstance) {
 			);
 		} catch (error) {
 			logger.error({ msg: '获取用户信息失败', error });
+			// 注意：即使出错，也返回 200 状态码 + success 格式
+			// 通过 status: 'error' 字段告知前端发生了错误
 			return reply.send(
 				success({
 					status: 'error',
@@ -220,14 +225,8 @@ export async function authRoutes(fastify: FastifyInstance) {
 	/**
 	 * POST /api/auth/logout
 	 * 退出登录
-	 *
-	 * 响应格式：
-	 * {
-	 *   "status": "success",
-	 *   "data": null
-	 * }
 	 */
-	fastify.post('/api/auth/logout', async (request, reply) => {
+	fastify.post('/api/auth/logout', { schema: logoutSchema }, async (request, reply) => {
 		try {
 			// 从 Authorization header 获取 Token
 			const authHeader = request.headers.authorization;

@@ -78,27 +78,42 @@ export async function getUserFavoritedModels(
  *
  * @param userId 用户ID
  * @param modelIds 模型ID数组
- * @returns 交互状态映射 { modelId: ['LIKE'] | ['FAVORITE'] | ['LIKE', 'FAVORITE'] | [] }
+ * @returns 交互状态映射 { modelId: { isLiked: boolean, isFavorited: boolean } }
  */
 export async function getBatchInteractions(
 	userId: string,
 	modelIds: string[],
-): Promise<Record<string, string[]>> {
-	// 初始化结果对象，所有模型默认为空数组
-	const result: Record<string, string[]> = {};
+): Promise<Record<string, { isLiked: boolean; isFavorited: boolean }>> {
+	// 定义返回类型
+	type InteractionStatus = { isLiked: boolean; isFavorited: boolean };
+
+	// 初始化结果对象，所有模型默认为未交互状态
+	const result: Record<string, InteractionStatus> = {};
 	for (const modelId of modelIds) {
-		result[modelId] = [];
+		result[modelId] = {
+			isLiked: false,
+			isFavorited: false,
+		};
 	}
 
 	// 批量查询交互记录
 	const interactions = await interactionRepository.findBatchInteractions(userId, modelIds);
 
-	// 填充交互状态
+	// 填充交互状态（将数组转换为对象）
 	for (const interaction of interactions) {
 		if (!result[interaction.modelId]) {
-			result[interaction.modelId] = [];
+			result[interaction.modelId] = {
+				isLiked: false,
+				isFavorited: false,
+			};
 		}
-		result[interaction.modelId].push(interaction.type);
+
+		// 根据交互类型设置对应字段
+		if (interaction.type === 'LIKE') {
+			result[interaction.modelId].isLiked = true;
+		} else if (interaction.type === 'FAVORITE') {
+			result[interaction.modelId].isFavorited = true;
+		}
 	}
 
 	return result;

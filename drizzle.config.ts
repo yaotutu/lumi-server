@@ -4,7 +4,7 @@ import { defineConfig } from 'drizzle-kit';
 config();
 
 export default defineConfig({
-	schema: './dist/db/schema/index.js',
+	schema: './src/db/schema',
 	out: './src/db/migrations',
 	dialect: 'mysql',
 	dbCredentials: {

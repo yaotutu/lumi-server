@@ -1,8 +1,6 @@
 import { buildApp } from './app.js';
 import { config } from './config/index.js';
 import { closeDatabase, testConnection } from './db/drizzle.js';
-import { sseConnectionManager } from './services/sse-connection-manager.js';
-import { ssePubSubService } from './services/sse-pubsub.service.js';
 import { logger } from './utils/logger.js';
 import { redisClient } from './utils/redis-client.js';
 
@@ -22,7 +20,7 @@ async function start() {
 		logger.info('========================================');
 
 		// 测试数据库连接
-		logger.info('步骤 1/5: 测试数据库连接...');
+		logger.info('步骤 1/3: 测试数据库连接...');
 		const dbConnected = await testConnection();
 		if (!dbConnected) {
 			throw new Error('Database connection failed');
@@ -30,7 +28,7 @@ async function start() {
 		logger.info('✅ 数据库连接成功');
 
 		// 测试 Redis 连接
-		logger.info('步骤 2/5: 测试 Redis 连接...');
+		logger.info('步骤 2/3: 测试 Redis 连接...');
 		const redisConnected = await redisClient.isReady();
 		if (!redisConnected) {
 			throw new Error(
@@ -41,30 +39,8 @@ async function start() {
 
 		logger.info('✅ Database and Redis connected successfully');
 
-		// 初始化 SSE Pub/Sub 服务
-		logger.info('步骤 3/5: 初始化 SSE Pub/Sub 服务...');
-		await ssePubSubService.initialize();
-		logger.info('✅ SSE Pub/Sub 服务初始化成功');
-
-		// 订阅 Redis 事件并转发给 SSE 连接
-		logger.info('步骤 4/5: 订阅 Redis SSE 事件...');
-		await ssePubSubService.subscribe((message) => {
-			logger.debug(
-				{
-					taskId: message.taskId,
-					eventType: message.eventType,
-				},
-				'收到 Redis SSE 事件，转发给本地连接',
-			);
-
-			// 推送给本地 SSE 连接
-			sseConnectionManager.sendToLocalConnections(message.taskId, message.eventType, message.data);
-		});
-
-		logger.info('✅ SSE Pub/Sub service initialized and subscribed');
-
 		// 构建应用
-		logger.info('步骤 5/5: 构建 Fastify 应用...');
+		logger.info('步骤 3/3: 构建 Fastify 应用...');
 		const app = await buildApp();
 		logger.info('✅ Fastify 应用构建成功');
 
@@ -96,7 +72,6 @@ async function start() {
 
 				try {
 					await app.close();
-					await ssePubSubService.close();
 					await redisClient.disconnect();
 					await closeDatabase();
 					logger.info('API Server closed successfully');

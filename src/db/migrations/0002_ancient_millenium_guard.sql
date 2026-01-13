@@ -1,0 +1,1 @@
+ALTER TABLE `generation_requests` ADD `original_prompt` text;

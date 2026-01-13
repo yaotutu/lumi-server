@@ -73,7 +73,7 @@ export class ModelRepository {
 				// 关联 request 信息
 				request: {
 					id: generationRequests.id,
-					prompt: generationRequests.prompt,
+					prompt: generationRequests.originalPrompt,
 					status: generationRequests.status,
 					phase: generationRequests.phase,
 				},
@@ -120,24 +120,114 @@ export class ModelRepository {
 	}
 
 	/**
-	 * 根据用户外部 ID 查询模型列表
+	 * 根据切片任务 ID 查询模型
+	 * 用于查询切片任务状态
+	 */
+	// biome-ignore lint/suspicious/noExplicitAny: 复杂的 join 查询返回类型，待定义专门的返回类型接口
+	async findBySliceTaskId(sliceTaskId: string): Promise<any> {
+		const [result] = await db
+			.select({
+				id: models.id,
+				sliceTaskId: models.sliceTaskId,
+				sliceStatus: models.sliceStatus,
+				gcodeUrl: models.gcodeUrl,
+				gcodeMetadata: models.gcodeMetadata,
+				externalUserId: models.externalUserId,
+				updatedAt: models.updatedAt,
+			})
+			.from(models)
+			.where(eq(models.sliceTaskId, sliceTaskId))
+			.limit(1);
+
+		return result;
+	}
+
+	/**
+	 * 根据用户外部 ID 查询模型列表（支持筛选和排序）
 	 */
 	async findByUserId(
 		externalUserId: string,
 		options: {
+			visibility?: 'PUBLIC' | 'PRIVATE';
+			sortBy?: 'latest' | 'name' | 'popular';
 			limit?: number;
 			offset?: number;
 		} = {},
 	): Promise<Model[]> {
-		const { limit = 20, offset = 0 } = options;
+		const { visibility, sortBy = 'latest', limit = 20, offset = 0 } = options;
 
-		return db
-			.select()
+		// 构建基础查询条件
+		const conditions = visibility
+			? and(eq(models.externalUserId, externalUserId), eq(models.visibility, visibility))
+			: eq(models.externalUserId, externalUserId);
+
+		// 根据排序方式选择排序字段
+		let orderBy;
+		if (sortBy === 'latest') {
+			orderBy = desc(models.createdAt);
+		} else if (sortBy === 'name') {
+			orderBy = models.name;
+		} else if (sortBy === 'popular') {
+			orderBy = desc(models.viewCount);
+		} else {
+			orderBy = desc(models.createdAt);
+		}
+
+		// 执行查询
+		return db.select().from(models).where(conditions).orderBy(orderBy).limit(limit).offset(offset);
+	}
+
+	/**
+	 * 统计用户模型数量（支持按可见性筛选）
+	 */
+	async countByUserId(
+		externalUserId: string,
+		options: { visibility?: 'PUBLIC' | 'PRIVATE' } = {},
+	): Promise<number> {
+		const { visibility } = options;
+
+		const conditions = visibility
+			? and(eq(models.externalUserId, externalUserId), eq(models.visibility, visibility))
+			: eq(models.externalUserId, externalUserId);
+
+		const query = db.select({ count: sql<number>`count(*)` }).from(models).where(conditions);
+
+		const [result] = await query;
+		return result.count;
+	}
+
+	/**
+	 * 获取用户模型的聚合统计数据
+	 * 统计用户所有公开模型的点赞、收藏、浏览、下载的总和
+	 * @param externalUserId 用户外部 ID
+	 * @returns 聚合统计数据对象（已转换为数字类型）
+	 */
+	async getUserModelsAggregateStats(externalUserId: string): Promise<{
+		totalLikes: number;
+		totalFavorites: number;
+		totalViews: number;
+		totalDownloads: number;
+	}> {
+		// 使用 SQL 聚合函数统计用户所有公开模型的总数据
+		// 只统计公开模型，私有模型不计入统计
+		const [result] = await db
+			.select({
+				totalLikes: sql<number>`COALESCE(SUM(${models.likeCount}), 0)`,
+				totalFavorites: sql<number>`COALESCE(SUM(${models.favoriteCount}), 0)`,
+				totalViews: sql<number>`COALESCE(SUM(${models.viewCount}), 0)`,
+				totalDownloads: sql<number>`COALESCE(SUM(${models.downloadCount}), 0)`,
+			})
 			.from(models)
-			.where(eq(models.externalUserId, externalUserId))
-			.orderBy(desc(models.createdAt))
-			.limit(limit)
-			.offset(offset);
+			.where(and(eq(models.externalUserId, externalUserId), eq(models.visibility, 'PUBLIC')));
+
+		// COALESCE 确保即使没有记录，也返回 0 而不是 null
+		// 需要显式转换为数字类型，因为 SQL SUM 可能返回字符串
+		return {
+			totalLikes: Number(result.totalLikes) || 0,
+			totalFavorites: Number(result.totalFavorites) || 0,
+			totalViews: Number(result.totalViews) || 0,
+			totalDownloads: Number(result.totalDownloads) || 0,
+		};
 	}
 
 	/**

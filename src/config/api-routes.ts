@@ -31,6 +31,8 @@ export const API_ROUTES = {
 	 */
 	protected: [
 		'/api/tasks', // 任务管理（包括所有子路径）
+		'/api/users', // 用户相关接口（包括所有子路径）
+		'/api/models', // 模型管理（包括所有子路径）
 		'/api/admin', // 管理接口（包括所有子路径）
 	],
 
@@ -44,12 +46,14 @@ export const API_ROUTES = {
 	protectedByMethod: [
 		{
 			path: '/api/gallery/models/:id/interactions', // 使用 :id 代替正则
-			methods: ['POST', 'PUT', 'DELETE'], // 点赞/收藏操作
+			methods: ['POST', 'PUT', 'DELETE'], // 仅 POST/PUT/DELETE 需要认证（点赞/收藏操作）
+			// GET 方法不需要认证，允许已登录和未登录用户访问
 		},
 		{
 			path: '/api/gallery/models/:id/download', // 模型下载
 			methods: ['GET', 'POST'],
 		},
+		// 🔥 移除 batch-interactions 的保护配置，改为可选认证（支持未登录访问）
 	] as ProtectedMethodRule[],
 
 	/**
@@ -127,14 +131,28 @@ function matchPathTemplate(pathname: string, template: string): boolean {
 export function isProtectedRoute(pathname: string, method: string): boolean {
 	// 1. 优先检查公开 API（白名单优先）
 	for (const pattern of API_ROUTES.public) {
-		if (matchesPattern(pathname, pattern)) {
-			// 进一步检查是否有特定方法的保护规则
-			for (const rule of API_ROUTES.protectedByMethod) {
-				if (matchPathTemplate(pathname, rule.path) && rule.methods.includes(method)) {
-					return true; // 虽然路径是公开的，但特定方法需要认证
+		// 支持路径模板（例如 /api/tasks/:id/status）
+		if (pattern.includes(':')) {
+			if (matchPathTemplate(pathname, pattern)) {
+				// 进一步检查是否有特定方法的保护规则
+				for (const rule of API_ROUTES.protectedByMethod) {
+					if (matchPathTemplate(pathname, rule.path) && rule.methods.includes(method)) {
+						return true; // 虽然路径是公开的，但特定方法需要认证
+					}
 				}
+				return false; // 公开 API
 			}
-			return false; // 公开 API
+		} else {
+			// 普通路径（使用 startsWith）
+			if (matchesPattern(pathname, pattern)) {
+				// 进一步检查是否有特定方法的保护规则
+				for (const rule of API_ROUTES.protectedByMethod) {
+					if (matchPathTemplate(pathname, rule.path) && rule.methods.includes(method)) {
+						return true; // 虽然路径是公开的，但特定方法需要认证
+					}
+				}
+				return false; // 公开 API
+			}
 		}
 	}
 

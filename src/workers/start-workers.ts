@@ -15,7 +15,6 @@
  */
 
 import type { Worker } from 'bullmq';
-import { ssePubSubService } from '@/services/sse-pubsub.service';
 import { logger } from '@/utils/logger';
 import { redisClient } from '@/utils/redis-client';
 import { createImageWorker } from './image.worker.js';
@@ -35,7 +34,7 @@ async function startWorkers() {
 
 	try {
 		// 测试 Redis 连接
-		logger.info('步骤 1/4: 测试 Redis 连接...');
+		logger.info('步骤 1/3: 测试 Redis 连接...');
 		const redisConnected = await redisClient.isReady();
 		if (!redisConnected) {
 			throw new Error(
@@ -44,19 +43,14 @@ async function startWorkers() {
 		}
 		logger.info('✅ Redis 连接成功');
 
-		// 初始化 SSE Pub/Sub 服务（Worker 只需要发布功能）
-		logger.info('步骤 2/4: 初始化 SSE Pub/Sub 服务...');
-		await ssePubSubService.initializePublisherOnly();
-		logger.info('✅ SSE Pub/Sub 发布服务已初始化');
-
 		// 启动 Image Worker
-		logger.info('步骤 3/4: 启动 Image Worker...');
+		logger.info('步骤 2/3: 启动 Image Worker...');
 		const imageWorker = createImageWorker();
 		workers.push(imageWorker);
 		logger.info('✅ Image Worker 已启动');
 
 		// 启动 Model Worker
-		logger.info('步骤 4/4: 启动 Model Worker...');
+		logger.info('步骤 3/3: 启动 Model Worker...');
 		const modelWorker = createModelWorker();
 		workers.push(modelWorker);
 		logger.info('✅ Model Worker 已启动');
@@ -102,10 +96,6 @@ async function gracefulShutdown(signal: string) {
 		// 关闭所有 Workers
 		await Promise.all(workers.map((worker) => worker.close()));
 		logger.info({ msg: '✅ 所有 Workers 已关闭' });
-
-		// 关闭 SSE Pub/Sub 服务
-		await ssePubSubService.close();
-		logger.info({ msg: '✅ SSE Pub/Sub 服务已关闭' });
 
 		// 断开 Redis 连接
 		await redisClient.disconnect();

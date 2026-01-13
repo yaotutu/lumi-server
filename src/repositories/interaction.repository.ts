@@ -1,4 +1,4 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '@/db/drizzle';
 import { type ModelInteraction, modelInteractions, type NewModelInteraction } from '@/db/schema';
 
@@ -147,6 +147,46 @@ export class InteractionRepository {
 	async hasFavorited(externalUserId: string, modelId: string): Promise<boolean> {
 		const interaction = await this.findByUserModelAndType(externalUserId, modelId, 'FAVORITE');
 		return !!interaction;
+	}
+
+	/**
+	 * 统计用户点赞的模型数量
+	 * @param externalUserId 用户外部 ID
+	 * @returns 用户点赞的模型总数
+	 */
+	async countUserLikes(externalUserId: string): Promise<number> {
+		// 使用 SQL COUNT 聚合函数统计点赞记录数
+		const [result] = await db
+			.select({ count: sql<number>`count(*)` })
+			.from(modelInteractions)
+			.where(
+				and(
+					eq(modelInteractions.externalUserId, externalUserId),
+					eq(modelInteractions.type, 'LIKE'),
+				),
+			);
+
+		return result.count;
+	}
+
+	/**
+	 * 统计用户收藏的模型数量
+	 * @param externalUserId 用户外部 ID
+	 * @returns 用户收藏的模型总数
+	 */
+	async countUserFavorites(externalUserId: string): Promise<number> {
+		// 使用 SQL COUNT 聚合函数统计收藏记录数
+		const [result] = await db
+			.select({ count: sql<number>`count(*)` })
+			.from(modelInteractions)
+			.where(
+				and(
+					eq(modelInteractions.externalUserId, externalUserId),
+					eq(modelInteractions.type, 'FAVORITE'),
+				),
+			);
+
+		return result.count;
 	}
 }
 

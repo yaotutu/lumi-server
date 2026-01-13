@@ -1,5 +1,4 @@
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
-import type { MySqlTransaction } from 'drizzle-orm/mysql-core';
 import { db } from '@/db/drizzle';
 import {
 	type GenerationRequest,
@@ -277,6 +276,53 @@ export class GenerationRequestRepository {
 			.where(eq(generationRequests.externalUserId, externalUserId));
 
 		return result.count;
+	}
+
+	/**
+	 * 统计用户的生成请求（按状态分类）
+	 * 返回总数、已完成数和失败数
+	 * @param externalUserId 用户外部 ID
+	 * @returns 包含总数、完成数、失败数的对象
+	 */
+	async countUserRequestsByStatus(externalUserId: string): Promise<{
+		total: number;
+		completed: number;
+		failed: number;
+	}> {
+		// 查询总请求数
+		const [totalResult] = await db
+			.select({ count: sql<number>`count(*)` })
+			.from(generationRequests)
+			.where(eq(generationRequests.externalUserId, externalUserId));
+
+		// 查询已完成的请求数（status = 'COMPLETED'）
+		const [completedResult] = await db
+			.select({ count: sql<number>`count(*)` })
+			.from(generationRequests)
+			.where(
+				and(
+					eq(generationRequests.externalUserId, externalUserId),
+					eq(generationRequests.status, 'COMPLETED'),
+				),
+			);
+
+		// 查询失败的请求数（status IN ('IMAGE_FAILED', 'MODEL_FAILED', 'FAILED')）
+		// 使用 OR 条件来匹配多个失败状态
+		const [failedResult] = await db
+			.select({ count: sql<number>`count(*)` })
+			.from(generationRequests)
+			.where(
+				and(
+					eq(generationRequests.externalUserId, externalUserId),
+					sql`${generationRequests.status} IN ('IMAGE_FAILED', 'MODEL_FAILED', 'FAILED')`,
+				),
+			);
+
+		return {
+			total: totalResult.count,
+			completed: completedResult.count,
+			failed: failedResult.count,
+		};
 	}
 
 	/**

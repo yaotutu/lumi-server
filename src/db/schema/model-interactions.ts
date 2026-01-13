@@ -1,8 +1,8 @@
 import { createId } from '@paralleldrive/cuid2';
 import { relations } from 'drizzle-orm';
 import { index, mysqlTable, timestamp, unique, varchar } from 'drizzle-orm/mysql-core';
-import { interactionTypeEnum } from './enums.js';
-import { models } from './models.js';
+import { interactionTypeEnum } from './enums';
+import { models } from './models';
 
 /**
  * 模型交互表（点赞/收藏记录）

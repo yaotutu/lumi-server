@@ -5,7 +5,6 @@
  * - 从 model-generation 队列消费任务
  * - 调用 3D 模型生成 Provider 生成模型
  * - 更新 Model 和 ModelGenerationJob 状态
- * - 通过 SSE 实时推送状态更新
  * - 处理失败和重试逻辑
  */
 
@@ -13,12 +12,10 @@ import { type Job, Worker } from 'bullmq';
 import { config } from '@/config/index.js';
 import { createModel3DProvider } from '@/providers/model3d';
 import type { ModelJobData } from '@/queues';
-import { modelJobRepository, modelRepository } from '@/repositories';
-import { sseConnectionManager } from '@/services/sse-connection-manager';
+import { generationRequestRepository, modelJobRepository, modelRepository } from '@/repositories';
 import { logger } from '@/utils/logger';
 import { downloadAndUploadModel, downloadAndUploadPreviewImage } from '@/utils/model-storage.js';
 import { redisClient } from '@/utils/redis-client';
-import { transformToProxyUrl } from '@/utils/url-transformer';
 
 /**
  * 处理 3D 模型生成任务
@@ -66,20 +63,6 @@ async function processModelJob(job: Job<ModelJobData>) {
 			providerName: modelProvider.getName(),
 		});
 
-		// ✅ SSE 推送: model:generating
-		await sseConnectionManager.broadcast(requestId, 'model:generating', {
-			modelId,
-			providerJobId,
-			imageUrl,
-		});
-
-		logger.info({
-			msg: '📡 SSE 推送: model:generating',
-			requestId,
-			modelId,
-			providerJobId,
-		});
-
 		// 轮询查询任务状态
 		let attempts = 0;
 		const maxAttempts = 60; // 最多轮询 60 次 (约 10 分钟)
@@ -104,12 +87,6 @@ async function processModelJob(job: Job<ModelJobData>) {
 			// 更新进度
 			const progress = Math.min(10 + Math.floor((attempts / maxAttempts) * 80), 90);
 			await modelJobRepository.updateProgress(jobId, progress);
-
-			// ✅ SSE 推送: model:progress
-			await sseConnectionManager.broadcast(requestId, 'model:progress', {
-				modelId,
-				progress,
-			});
 
 			if (status.status === 'DONE') {
 				// 任务完成
@@ -184,19 +161,15 @@ async function processModelJob(job: Job<ModelJobData>) {
 					completedAt,
 				});
 
-				// ✅ SSE 推送: model:completed（推送代理 URL，前端可直接使用）
-				await sseConnectionManager.broadcast(requestId, 'model:completed', {
-					modelId,
-					modelUrl: transformToProxyUrl(objUrl, 'model'), // ✅ 转换为代理 URL
-					mtlUrl: transformToProxyUrl(mtlUrl, 'model'), // ✅ 转换为代理 URL
-					textureUrl: transformToProxyUrl(textureUrl, 'model'), // ✅ 转换为代理 URL
-					previewImageUrl: transformToProxyUrl(previewImageStorageUrl, 'image'), // ✅ 转换为代理 URL
-					format: modelFile.type || 'OBJ',
+				// ✅ 更新 GenerationRequest 状态为 COMPLETED
+				await generationRequestRepository.update(requestId, {
+					status: 'COMPLETED',
+					phase: 'COMPLETED',
 					completedAt,
 				});
 
 				logger.info({
-					msg: '📡 SSE 推送: model:completed',
+					msg: '✅ 3D模型生成任务完成',
 					requestId,
 					modelId,
 					modelUrl: modelFile.url,
@@ -234,14 +207,8 @@ async function processModelJob(job: Job<ModelJobData>) {
 			errorMessage,
 		});
 
-		// ✅ SSE 推送: model:failed
-		await sseConnectionManager.broadcast(requestId, 'model:failed', {
-			modelId,
-			errorMessage,
-		});
-
 		logger.info({
-			msg: '📡 SSE 推送: model:failed',
+			msg: '❌ 3D模型生成失败',
 			requestId,
 			modelId,
 			errorMessage,

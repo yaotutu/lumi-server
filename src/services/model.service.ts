@@ -33,6 +33,45 @@ export async function getUserModels(userId: string, options?: { limit?: number; 
 	return modelRepository.findByUserId(userId, options);
 }
 
+/**
+ * 获取用户模型列表（带统计信息）
+ */
+export async function getUserModelsWithStats(
+	userId: string,
+	options?: {
+		visibility?: 'PUBLIC' | 'PRIVATE';
+		sortBy?: 'latest' | 'name' | 'popular';
+		limit?: number;
+		offset?: number;
+	},
+) {
+	const { visibility, sortBy = 'latest', limit = 20, offset = 0 } = options || {};
+
+	// 获取模型列表
+	const items = await modelRepository.findByUserId(userId, {
+		visibility,
+		sortBy,
+		limit,
+		offset,
+	});
+
+	// 获取总数
+	const total = await modelRepository.countByUserId(userId);
+
+	// 获取公开模型数
+	const publicCount = await modelRepository.countByUserId(userId, { visibility: 'PUBLIC' });
+
+	// 计算是否还有更多
+	const hasMore = offset + items.length < total;
+
+	return {
+		items,
+		total,
+		publicCount,
+		hasMore,
+	};
+}
+
 export async function getPublicModels(options?: {
 	limit?: number;
 	offset?: number;
@@ -88,7 +127,9 @@ export async function createModelForRequest(requestId: string, imageIndex: numbe
 	if (selectedImage.imageStatus !== 'COMPLETED' || !selectedImage.imageUrl) {
 		throw new InvalidStateError('选中的图片尚未生成完成');
 	}
-	const modelName = `${request.prompt.substring(0, 20)}_model`;
+	// ✅ 使用 originalPrompt（用户原始输入）生成模型名称，回退到 requestId 的前 20 个字符
+	const promptForName = request.originalPrompt || request.id;
+	const modelName = `${promptForName.substring(0, 20)}_model`;
 	await generationRequestRepository.update(requestId, { selectedImageIndex: imageIndex });
 
 	// 创建 Model 记录（默认为 PUBLIC）
@@ -141,6 +182,27 @@ export async function unpublishModel(modelId: string, userId: string) {
 	const model = await getModelById(modelId);
 	if (model.externalUserId !== userId) throw new ForbiddenError('无权限操作此模型');
 	return modelRepository.updateVisibility(modelId, 'PRIVATE');
+}
+
+/**
+ * 更新模型可见性（统一接口）
+ */
+export async function updateModelVisibility(
+	modelId: string,
+	userId: string,
+	visibility: 'PUBLIC' | 'PRIVATE',
+) {
+	const model = await getModelById(modelId);
+	if (model.externalUserId !== userId) throw new ForbiddenError('无权限修改此模型');
+
+	// 如果要设为公开，需要检查模型是否生成完成
+	if (visibility === 'PUBLIC') {
+		if (!model.completedAt || !model.modelUrl) {
+			throw new InvalidStateError('模型尚未生成完成，无法发布');
+		}
+	}
+
+	return modelRepository.updateVisibility(modelId, visibility);
 }
 
 /**
