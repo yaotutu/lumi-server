@@ -112,17 +112,27 @@ export async function slicesRoutes(fastify: FastifyInstance) {
 			// 需要提取 url 参数并解码，得到原始的 COS URL
 			let objectUrl: string;
 
-			if (model.modelUrl.startsWith('http')) {
-				// 已经是完整 URL，直接使用
-				objectUrl = model.modelUrl;
-			} else if (model.modelUrl.includes('/api/proxy/model?url=')) {
+			// 优先检查是否是代理 URL（无论是完整 URL 还是相对路径）
+			if (model.modelUrl.includes('/api/proxy/model?url=')) {
 				// 是代理 URL，提取原始 URL
 				const urlMatch = model.modelUrl.match(/[?&]url=([^&]+)/);
 				if (urlMatch) {
 					objectUrl = decodeURIComponent(urlMatch[1]);
+					logger.info({
+						msg: '✅ 从代理 URL 中提取原始 URL',
+						proxyUrl: model.modelUrl,
+						extractedUrl: objectUrl,
+					});
 				} else {
 					throw new Error('无法从代理 URL 中提取原始 URL');
 				}
+			} else if (model.modelUrl.startsWith('https://')) {
+				// 已经是 HTTPS URL，直接使用
+				objectUrl = model.modelUrl;
+				logger.info({
+					msg: '✅ 使用原始 HTTPS URL',
+					url: objectUrl,
+				});
 			} else {
 				// 其他情况，抛出错误
 				throw new Error(`不支持的 modelUrl 格式: ${model.modelUrl}`);

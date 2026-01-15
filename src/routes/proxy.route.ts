@@ -11,8 +11,17 @@
 
 import AdmZip from 'adm-zip';
 import type { FastifyInstance } from 'fastify';
+import { config } from '@/config/index.js';
 import { proxyImageSchema, proxyModelSchema } from '@/schemas/routes/proxy.schema';
 import { logger } from '@/utils/logger';
+
+function getProxyBaseUrl(request: {
+	protocol: string;
+	hostname: string;
+	headers: Record<string, string | string[] | undefined>;
+}) {
+	return config.proxy.baseUrl.replace(/\/+$/, '');
+}
 
 /**
  * 注册代理路由
@@ -270,7 +279,9 @@ export async function proxyRoutes(fastify: FastifyInstance) {
 								const fullTextureUrl = `${baseUrl}/${texturePath}`;
 
 								// 构建代理 URL
-								const proxyUrl = `${request.protocol}://${request.hostname}:${request.port || 3000}/api/proxy/model?url=${encodeURIComponent(fullTextureUrl)}`;
+								const proxyUrl = `${getProxyBaseUrl(request)}/api/proxy/model?url=${encodeURIComponent(
+									fullTextureUrl,
+								)}`;
 
 								logger.info({
 									msg: '🔄 替换 MTL 纹理路径',

@@ -1,12 +1,14 @@
 /**
  * URL 转换工具
  *
- * 将云存储的 S3 URL 转换为后端代理 URL（相对路径）
- * 前端收到后拼接完整 URL，已经解决了跨域问题，可以直接使用
+ * 将云存储的 S3 URL 转换为后端代理 URL（绝对路径）
+ * 前端可直接使用，无需再拼接
  */
 
+import { config } from '@/config/index.js';
+
 /**
- * 将 S3 URL 转换为后端代理 URL（相对路径）
+ * 将 S3 URL 转换为后端代理 URL（绝对路径）
  *
  * @param url - 原始 URL（可能是 S3 URL）
  * @param type - URL 类型（image 或 model）
@@ -47,11 +49,9 @@ export function transformToProxyUrl(
 		return url;
 	}
 
-	// 返回相对路径，由前端拼接完整 URL
-	// 前端已经知道后端地址（NEXT_PUBLIC_API_BASE_URL），无需在后端配置
 	const endpoint = type === 'image' ? '/api/proxy/image' : '/api/proxy/model';
-
-	return `${endpoint}?url=${encodeURIComponent(url)}`;
+	const baseUrl = config.proxy.baseUrl.replace(/\/+$/, '');
+	return `${baseUrl}${endpoint}?url=${encodeURIComponent(url)}`;
 }
 
 /**
