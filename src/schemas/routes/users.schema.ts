@@ -101,7 +101,9 @@ export const getUserFavoritesSchema = {
 	}),
 	response: {
 		200: JSendSuccess(Type.Array(ModelEntity)),
+		400: JSendFail, // 参数错误
 		401: JSendFail, // 未认证
+		404: JSendFail, // 资源不存在
 		500: JSendFail, // 服务器内部错误
 	},
 } as const;
@@ -119,7 +121,9 @@ export const getUserLikesSchema = {
 	}),
 	response: {
 		200: JSendSuccess(Type.Array(ModelEntity)),
+		400: JSendFail, // 参数错误
 		401: JSendFail, // 未认证
+		404: JSendFail, // 资源不存在
 		500: JSendFail, // 服务器内部错误
 	},
 } as const;
@@ -147,6 +151,7 @@ export const getUserMyModelsSchema = {
 	}),
 	response: {
 		200: JSendSuccess(Type.Array(ModelEntity)),
+		400: JSendFail, // 参数错误
 		401: JSendFail, // 未认证
 		500: JSendFail, // 服务器内部错误
 	},

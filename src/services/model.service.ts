@@ -30,8 +30,11 @@ export async function getModelById(modelId: string) {
 }
 
 /**
- * 获取用户模型列表（基础版本）
- * 从 user.route.ts 搬运过来的逻辑
+ * 获取用户模型列表
+ *
+ * @param userId 用户 ID
+ * @param options 查询选项（可见性、排序方式、分页参数）
+ * @returns 模型列表
  */
 export async function getUserModels(
 	userId: string,
@@ -42,7 +45,7 @@ export async function getUserModels(
 		offset?: number;
 	},
 ) {
-	// 👇 从 Router 搬运的逻辑（原封不动）
+	// 调用 Repository 获取用户创建的模型列表
 	const models = await modelRepository.findByUserId(userId, {
 		visibility: options?.visibility,
 		sortBy: options?.sortBy || 'latest',

@@ -120,7 +120,7 @@ export async function getBatchInteractions(
 }
 
 /**
- * 统一的交互切换方法（从 Router 搬运过来的逻辑）
+ * 统一的交互切换方法
  * 处理点赞或收藏操作，并返回完整的计数信息
  *
  * @param userId 用户 ID
