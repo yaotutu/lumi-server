@@ -16,7 +16,7 @@
  */
 
 import type { FastifyInstance } from 'fastify';
-import { getUserServiceClient } from '@/clients/user-service.client';
+import { getUserServiceClient } from '@/clients/user';
 import config from '@/config/index';
 import {
 	getMeSchema,
@@ -50,15 +50,11 @@ export async function authRoutes(fastify: FastifyInstance) {
 				type: 'login' | 'register' | 'modify_password';
 			};
 
-			// 调用外部用户服务
-			const response = await userClient.sendVerifyCode(email, type);
+			// 调用外部用户服务（Client 中间层已处理错误）
+			// 返回 { message: string }
+			await userClient.sendVerifyCode(email, type);
 
-			if (response.code === 200) {
-				return reply.send(success(null));
-			}
-
-			// 发送验证码失败，返回 400 状态码
-			return reply.status(400).send(fail(response.msg || '发送验证码失败'));
+			return reply.send(success(null));
 		} catch (error) {
 			logger.error({ msg: '发送验证码失败', error });
 			// 服务器内部错误，返回 500 状态码
@@ -77,17 +73,13 @@ export async function authRoutes(fastify: FastifyInstance) {
 				code: string;
 			};
 
-			// 调用外部用户服务
-			const response = await userClient.register(email, code);
+			// 调用外部用户服务（Client 中间层已处理错误）
+			// 返回 { message: string }
+			await userClient.register(email, code);
 
-			if (response.code === 200) {
-				return reply.send(success(null));
-			}
-
-			// 注册失败，返回 400 状态码
-			return reply.status(400).send(fail(response.msg || '注册失败'));
+			return reply.send(success(null));
 		} catch (error) {
-			logger.error({ msg: '用户注册失败', error });
+			logger.error({ msg: '注册失败', error });
 			// 服务器内部错误，返回 500 状态码
 			return reply.status(500).send(fail('注册失败'));
 		}
@@ -105,18 +97,13 @@ export async function authRoutes(fastify: FastifyInstance) {
 			};
 
 			// 调用外部用户服务
-			const response = await userClient.login(email, code);
+			const token = await userClient.login(email, code);
 
-			if (response.code === 200 && response.data) {
-				return reply.send(
-					success({
-						token: response.data,
-					}),
-				);
-			}
-
-			// 登录失败，返回 401 状态码
-			return reply.status(401).send(fail(response.msg || '登录失败'));
+			return reply.send(
+				success({
+					token,
+				}),
+			);
 		} catch (error) {
 			logger.error({ msg: '用户登录失败', error });
 			// 服务器内部错误，返回 500 状态码
@@ -163,13 +150,9 @@ export async function authRoutes(fastify: FastifyInstance) {
 			}
 
 			// 调用外部用户服务退出登录
-			const response = await userClient.logout(authHeader);
+			await userClient.logout(authHeader);
 
-			if (response.code === 200) {
-				return reply.send(success(null));
-			}
-
-			// 即使退出失败，也返回成功（本地清除状态即可）
+			// 退出成功
 			return reply.send(success(null));
 		} catch (error) {
 			logger.error({ msg: '退出登录失败', error });

@@ -9,7 +9,7 @@
  * @deprecated 用户管理已迁移到外部服务，本文件保留仅用于验证码功能
  */
 
-import { getUserServiceClient } from '@/clients/user-service.client';
+import { getUserServiceClient } from '@/clients/user';
 import config from '@/config/index';
 import { ValidationError } from '@/utils/errors';
 import { logger } from '@/utils/logger';
@@ -99,69 +99,62 @@ export async function getUserProfile(authHeader: string | undefined): Promise<{
 			timeout: 10000,
 		});
 
-		// 使用 UserServiceClient 获取用户信息
-		const response = await userClient.getUserInfo(authHeader);
+		// 使用 UserServiceClient 获取用户信息（Client 中间层已处理错误和解包）
+		const userInfo = await userClient.getUserInfo(authHeader);
 
-		if (response.code === 200 && response.data) {
-			// 构建 user 对象，只包含必需字段
-			const userData: Record<string, unknown> = {
-				id: response.data.user_id,
-				userName: response.data.user_name,
-				nickName: response.data.nick_name,
-			};
+		// 构建 user 对象，只包含必需字段
+		const userData: Record<string, unknown> = {
+			id: userInfo.user_id,
+			userName: userInfo.user_name,
+			nickName: userInfo.nick_name,
+		};
 
-			// 添加可选字段（仅在存在时）
-			if (response.data.email) {
-				userData.email = response.data.email;
-			}
-			if (response.data.avatar !== undefined) {
-				userData.avatar = response.data.avatar || null;
-			}
-			if (response.data.gender) {
-				userData.gender = response.data.gender;
-			}
+		// 添加可选字段（仅在存在时）
+		if (userInfo.email) {
+			userData.email = userInfo.email;
+		}
+		if (userInfo.avatar !== undefined) {
+			userData.avatar = userInfo.avatar || null;
+		}
+		if (userInfo.gender) {
+			userData.gender = userInfo.gender;
+		}
 
-			// 获取用户统计数据
-			// 如果统计数据查询失败，使用默认值（全部为 0）
-			let stats = null;
-			try {
-				stats = await UserStatsService.getUserStats(response.data.user_id);
-			} catch (statsError) {
-				// 统计数据查询失败时，记录警告日志，但不影响用户基本信息的返回
-				logger.warn({
-					msg: '获取用户统计数据失败，使用默认值',
-					userId: response.data.user_id,
-					error: statsError,
-				});
-				// 使用默认统计数据（全部为 0）
-				stats = {
-					totalModels: 0,
-					publicModels: 0,
-					privateModels: 0,
-					totalLikes: 0,
-					totalFavorites: 0,
-					totalViews: 0,
-					totalDownloads: 0,
-					likedModelsCount: 0,
-					favoritedModelsCount: 0,
-					totalRequests: 0,
-					completedRequests: 0,
-					failedRequests: 0,
-				};
-			}
-
-			// 将统计数据添加到用户对象中
-			userData.stats = stats;
-
-			return {
-				status: 'authenticated',
-				user: userData,
+		// 获取用户统计数据
+		// 如果统计数据查询失败，使用默认值（全部为 0）
+		let stats = null;
+		try {
+			stats = await UserStatsService.getUserStats(userInfo.user_id);
+		} catch (statsError) {
+			// 统计数据查询失败时，记录警告日志，但不影响用户基本信息的返回
+			logger.warn({
+				msg: '获取用户统计数据失败，使用默认值',
+				userId: userInfo.user_id,
+				error: statsError,
+			});
+			// 使用默认统计数据（全部为 0）
+			stats = {
+				totalModels: 0,
+				publicModels: 0,
+				privateModels: 0,
+				totalLikes: 0,
+				totalFavorites: 0,
+				totalViews: 0,
+				totalDownloads: 0,
+				likedModelsCount: 0,
+				favoritedModelsCount: 0,
+				totalRequests: 0,
+				completedRequests: 0,
+				failedRequests: 0,
 			};
 		}
 
+		// 将统计数据添加到用户对象中
+		userData.stats = stats;
+
 		return {
-			status: 'unauthenticated',
-			user: null,
+			status: 'authenticated',
+			user: userData,
 		};
 	} catch (error) {
 		logger.error({ msg: '获取用户信息失败', error });

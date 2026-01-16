@@ -9,7 +9,7 @@
  * - 错误处理和日志记录
  */
 
-import { getDeviceServiceClient } from '@/clients/device-service.client.js';
+import { getDeviceServiceClient } from '@/clients/device';
 import { config } from '@/config/index.js';
 import type { ProductEntityType } from '@/schemas/entities/device.entity.schema.js';
 import { logger } from '@/utils/logger.js';
@@ -78,11 +78,11 @@ export async function getProducts(options: GetProductsOptions): Promise<GetProdu
 		timeout: config.deviceService.timeout,
 	});
 
-	// 第 3 步：调用外部服务
-	let response: Awaited<ReturnType<typeof deviceClient.getProducts>>;
-
+	// 第 3 步：调用外部服务（Client 层已处理格式转换和错误验证）
 	try {
-		response = await deviceClient.getProducts(
+		// Client 层返回的已经是转换后的格式：{ products: ProductEntityType[], total: number }
+		// 不再需要验证 code、msg、data 字段
+		const result = await deviceClient.getProducts(
 			{
 				page,
 				size,
@@ -90,6 +90,15 @@ export async function getProducts(options: GetProductsOptions): Promise<GetProdu
 			},
 			token, // 传递用户 Token
 		);
+
+		logger.info({
+			msg: '✅ 查询产品列表成功',
+			total: result.total,
+			count: result.products.length,
+		});
+
+		// 直接返回（Client 层已完成格式转换）
+		return result;
 	} catch (error) {
 		logger.error({
 			msg: '❌ 调用外部 Device 服务失败',
@@ -98,60 +107,8 @@ export async function getProducts(options: GetProductsOptions): Promise<GetProdu
 			keyword,
 			error: error instanceof Error ? error.message : String(error),
 		});
-		throw new Error('Device 服务暂时不可用，请稍后重试');
+
+		// 重新抛出错误（错误已经由 Client 中间层处理，转换为统一的错误类）
+		throw error;
 	}
-
-	// 检查外部服务响应码
-	if (response.code !== 200) {
-		logger.error({
-			msg: '❌ Device 服务返回错误',
-			code: response.code,
-			message: response.msg,
-		});
-
-		// 特殊处理认证错误
-		if (response.code === 401) {
-			throw new Error('Device 服务认证失败，请检查配置');
-		}
-
-		throw new Error(`Device 服务错误: ${response.msg}`);
-	}
-
-	// 检查 data 字段是否存在
-	if (!response.data || !Array.isArray(response.data)) {
-		logger.error({
-			msg: '❌ Device 服务响应格式错误',
-			response,
-		});
-		throw new Error('Device 服务响应格式错误');
-	}
-
-	logger.info({
-		msg: '✅ 查询产品列表成功',
-		total: response.total,
-		count: response.data.length,
-	});
-
-	// 第 4 步：格式转换（外部格式 → 内部格式）
-	// - snake_case → camelCase
-	// - Unix 时间戳（秒）→ ISO 8601 字符串
-	const products = response.data.map((product) => ({
-		id: product.id,
-		productId: product.product_id,
-		name: product.name,
-		description: product.description,
-		image: product.image,
-		isActive: product.is_active,
-		createdAt: new Date(product.created_at * 1000).toISOString(),
-		createdBy: product.created_by,
-		updatedAt: new Date(product.updated_at * 1000).toISOString(),
-		updatedBy: product.updated_by,
-		deletedAt: product.deleted_at ? new Date(product.deleted_at * 1000).toISOString() : null,
-		deletedBy: product.deleted_by || null,
-	}));
-
-	return {
-		products,
-		total: response.total,
-	};
 }

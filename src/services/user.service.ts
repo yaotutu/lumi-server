@@ -9,12 +9,11 @@
  * - 抛出自定义错误类（UnauthenticatedError、ValidationError 等）
  */
 
-import { getUserServiceClient } from '@/clients/user-service.client';
+import { getUserServiceClient } from '@/clients/user';
 import config from '@/config/index';
 import * as InteractionService from '@/services/interaction.service';
 import * as ModelService from '@/services/model.service';
 import type { UserInfoData } from '@/types/user-service.types';
-import { ExternalAPIError, NotFoundError, UnauthenticatedError } from '@/utils/errors';
 import { logger } from '@/utils/logger';
 
 /**
@@ -136,11 +135,10 @@ export async function getUserModels(
  * @param userId 用户 ID
  * @param authToken 认证 Token
  * @returns 用户信息
- * @throws {UnauthenticatedError} 认证失败
- * @throws {NotFoundError} 用户不存在
- * @throws {ExternalAPIError} 外部服务错误
+ * @throws {UnauthenticatedError} 认证失败（由 Client 中间层抛出）
+ * @throws {ExternalAPIError} 外部服务错误（由 Client 中间层抛出）
  */
-export async function getUserById(userId: string, authToken: string) {
+export async function getUserById(userId: string, authToken: string): Promise<UserInfoData> {
 	logger.debug({
 		msg: '获取指定用户信息',
 		userId,
@@ -152,47 +150,17 @@ export async function getUserById(userId: string, authToken: string) {
 		timeout: 10000,
 	});
 
-	// 调用外部用户服务
-	const response = await userClient.getUserById(userId, authToken);
-
-	// ✅ 根据响应抛出自定义错误类（而非字符串匹配）
-	if (response.code === 401 || response.code === 403) {
-		logger.warn({
-			msg: '❌ 获取用户信息失败：认证失败',
-			userId,
-			businessCode: response.code,
-			businessMsg: response.msg,
-		});
-		throw new UnauthenticatedError('认证失败，请重新登录');
-	}
-
-	if (response.code === 404) {
-		logger.warn({
-			msg: '❌ 获取用户信息失败：用户不存在',
-			userId,
-			businessCode: response.code,
-			businessMsg: response.msg,
-		});
-		throw new NotFoundError('用户不存在');
-	}
-
-	if (response.code !== 200) {
-		logger.error({
-			msg: '❌ 获取用户信息失败：外部服务错误',
-			userId,
-			businessCode: response.code,
-			businessMsg: response.msg,
-		});
-		throw new ExternalAPIError(response.msg || '获取用户信息失败', 'UserService');
-	}
+	// 调用外部用户服务（Client 中间层已处理错误验证和解包）
+	// 不再需要手动验证 code 字段
+	// 错误会由 Client 中间层自动转换为 UnauthenticatedError 或 ExternalAPIError
+	const userInfo = await userClient.getUserById(userId, authToken);
 
 	logger.info({
 		msg: '✅ 获取指定用户信息成功',
 		userId,
 	});
 
-	// response.data 已经在前面通过 code !== 200 的检查保证了存在性
-	return response.data as UserInfoData;
+	return userInfo;
 }
 
 /**
@@ -202,9 +170,8 @@ export async function getUserById(userId: string, authToken: string) {
  * @param updateData 更新数据（nick_name, avatar, gender）
  * @param authToken 认证 Token
  * @returns 成功消息
- * @throws {UnauthenticatedError} 认证失败
- * @throws {ValidationError} 参数验证失败
- * @throws {ExternalAPIError} 外部服务错误
+ * @throws {UnauthenticatedError} 认证失败（由 Client 中间层抛出）
+ * @throws {ExternalAPIError} 外部服务错误（由 Client 中间层抛出）
  */
 export async function updateUser(
 	userId: string,
@@ -214,7 +181,7 @@ export async function updateUser(
 		gender?: string;
 	},
 	authToken: string,
-) {
+): Promise<{ message: string }> {
 	logger.debug({
 		msg: '更新用户信息',
 		userId,
@@ -227,36 +194,16 @@ export async function updateUser(
 		timeout: 10000,
 	});
 
-	// 调用外部用户服务
-	const response = await userClient.updateUser(userId, updateData, authToken);
-
-	// ✅ 根据响应抛出自定义错误类
-	if (response.code === 401 || response.code === 403) {
-		logger.warn({
-			msg: '❌ 更新用户信息失败：认证失败',
-			userId,
-			businessCode: response.code,
-			businessMsg: response.msg,
-		});
-		throw new UnauthenticatedError('认证失败，请重新登录');
-	}
-
-	if (response.code !== 200) {
-		logger.error({
-			msg: '❌ 更新用户信息失败：外部服务错误',
-			userId,
-			businessCode: response.code,
-			businessMsg: response.msg,
-		});
-		throw new ExternalAPIError(response.msg || '更新用户信息失败', 'UserService');
-	}
+	// 调用外部用户服务（Client 中间层已处理错误验证）
+	// 返回 { message: string }
+	const result = await userClient.updateUser(userId, updateData, authToken);
 
 	logger.info({
 		msg: '✅ 更新用户信息成功',
 		userId,
 	});
 
-	return { message: response.msg || '更新成功' };
+	return result;
 }
 
 /**
@@ -266,9 +213,8 @@ export async function updateUser(
  * @param passwordData 密码数据（old_password, new_password, repassword, random_code）
  * @param authToken 认证 Token
  * @returns 成功消息
- * @throws {UnauthenticatedError} 认证失败
- * @throws {ValidationError} 参数验证失败
- * @throws {ExternalAPIError} 外部服务错误
+ * @throws {UnauthenticatedError} 认证失败（由 Client 中间层抛出）
+ * @throws {ExternalAPIError} 外部服务错误（由 Client 中间层抛出）
  */
 export async function modifyPassword(
 	userId: string,
@@ -279,7 +225,7 @@ export async function modifyPassword(
 		random_code: string;
 	},
 	authToken: string,
-) {
+): Promise<{ message: string }> {
 	logger.debug({
 		msg: '修改密码',
 		userId,
@@ -291,34 +237,14 @@ export async function modifyPassword(
 		timeout: 10000,
 	});
 
-	// 调用外部用户服务
-	const response = await userClient.modifyPassword(userId, passwordData, authToken);
-
-	// ✅ 根据响应抛出自定义错误类
-	if (response.code === 401 || response.code === 403) {
-		logger.warn({
-			msg: '❌ 修改密码失败：认证失败',
-			userId,
-			businessCode: response.code,
-			businessMsg: response.msg,
-		});
-		throw new UnauthenticatedError('认证失败，请重新登录');
-	}
-
-	if (response.code !== 200) {
-		logger.error({
-			msg: '❌ 修改密码失败：外部服务错误',
-			userId,
-			businessCode: response.code,
-			businessMsg: response.msg,
-		});
-		throw new ExternalAPIError(response.msg || '修改密码失败', 'UserService');
-	}
+	// 调用外部用户服务（Client 中间层已处理错误验证）
+	// 返回 { message: string }
+	const result = await userClient.modifyPassword(userId, passwordData, authToken);
 
 	logger.info({
 		msg: '✅ 修改密码成功',
 		userId,
 	});
 
-	return { message: response.msg || '修改密码成功' };
+	return result;
 }

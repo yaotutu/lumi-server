@@ -5,7 +5,7 @@
  * 从 slices.route.ts 搬运过来的业务逻辑
  */
 
-import { getSlicerServiceClient } from '@/clients/slicer-service.client.js';
+import { getSlicerServiceClient } from '@/clients/slicer';
 import { config } from '@/config/index.js';
 import { modelRepository } from '@/repositories/index.js';
 import { ValidationError } from '@/utils/errors.js';

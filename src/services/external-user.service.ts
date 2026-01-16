@@ -7,7 +7,7 @@
  * - 保持接口不变，避免影响认证中间件
  */
 
-import { getUserServiceClient } from '@/clients/user-service.client';
+import { getUserServiceClient } from '@/clients/user';
 import config from '@/config/index';
 import { logger } from '@/utils/logger';
 
@@ -39,27 +39,19 @@ export async function verifyTokenAndGetUser(token: string): Promise<ExternalUser
 			timeout: 10000,
 		});
 
-		const response = await client.getUserInfo(token);
+		// Client 中间层已处理错误验证和解包，直接返回 UserInfoData
+		const userInfo = await client.getUserInfo(token);
 
-		// 检查响应格式：{ code: 200, msg: "success", data: { user_id, ... } }
-		if (response.code === 200 && response.data) {
-			logger.info({
-				msg: '✅ Token 验证成功',
-				userId: response.data.user_id,
-				email: response.data.email,
-			});
-			return response.data as ExternalUser;
-		}
-
-		logger.warn({
-			msg: '外部用户服务响应格式异常',
-			responseCode: response.code,
-			responseMsg: response.msg,
-			token: `${token.substring(0, 17)}...`, // "Bearer " + 前10个字符
+		logger.info({
+			msg: '✅ Token 验证成功',
+			userId: userInfo.user_id,
+			email: userInfo.email,
 		});
 
-		return null;
+		return userInfo as ExternalUser;
 	} catch (error) {
+		// Client 中间层会抛出 UnauthenticatedError 或 ExternalAPIError
+		// 认证失败或外部服务错误都返回 null
 		logger.error({ msg: '调用外部用户服务失败', error });
 		return null;
 	}
