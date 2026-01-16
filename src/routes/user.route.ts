@@ -32,6 +32,7 @@ import {
 import * as InteractionService from '@/services/interaction.service';
 import * as ModelService from '@/services/model.service';
 import { logger } from '@/utils/logger';
+import { getAuthTokenFromRequest } from '@/utils/request-auth.js';
 import { fail, success } from '@/utils/response';
 
 /**
@@ -181,10 +182,8 @@ export async function userRoutes(fastify: FastifyInstance) {
 		{ schema: getUserByIdSchema },
 		async (request, reply) => {
 			try {
-				const authHeader = request.headers.authorization;
-				if (!authHeader) {
-					return reply.status(401).send(fail('未提供认证凭证', 'UNAUTHENTICATED'));
-				}
+				// 使用统一工具函数提取 Token
+				const authHeader = getAuthTokenFromRequest(request);
 
 				const { id } = request.params;
 
@@ -200,6 +199,11 @@ export async function userRoutes(fastify: FastifyInstance) {
 					.code((response.code || 400) as 200 | 400 | 401 | 500)
 					.send(fail(response.msg || '获取用户信息失败', 'USER_SERVICE_ERROR'));
 			} catch (error) {
+				// 认证错误（由 getAuthTokenFromRequest 抛出）
+				if (error instanceof Error && error.message.includes('认证')) {
+					return reply.status(401).send(fail(error.message, 'UNAUTHORIZED'));
+				}
+
 				logger.error({ msg: '获取用户信息失败', error });
 				return reply.status(500).send(fail('服务器内部错误', 'INTERNAL_ERROR'));
 			}
@@ -219,10 +223,8 @@ export async function userRoutes(fastify: FastifyInstance) {
 		};
 	}>('/api/users/update', { schema: updateUserSchema }, async (request, reply) => {
 		try {
-			const authHeader = request.headers.authorization;
-			if (!authHeader) {
-				return reply.status(401).send(fail('未提供认证凭证', 'UNAUTHENTICATED'));
-			}
+			// 使用统一工具函数提取 Token
+			const authHeader = getAuthTokenFromRequest(request);
 
 			const { id, nick_name, avatar, gender } = request.body;
 
@@ -246,6 +248,11 @@ export async function userRoutes(fastify: FastifyInstance) {
 				.code((response.code || 400) as 200 | 400 | 401 | 500)
 				.send(fail(response.msg || '更新用户信息失败', 'USER_SERVICE_ERROR'));
 		} catch (error) {
+			// 认证错误（由 getAuthTokenFromRequest 抛出）
+			if (error instanceof Error && error.message.includes('认证')) {
+				return reply.status(401).send(fail(error.message, 'UNAUTHORIZED'));
+			}
+
 			logger.error({ msg: '更新用户信息失败', error });
 			return reply.status(500).send(fail('服务器内部错误', 'INTERNAL_ERROR'));
 		}
@@ -265,10 +272,8 @@ export async function userRoutes(fastify: FastifyInstance) {
 		};
 	}>('/api/users/modify-password', { schema: modifyPasswordSchema }, async (request, reply) => {
 		try {
-			const authHeader = request.headers.authorization;
-			if (!authHeader) {
-				return reply.status(401).send(fail('未提供认证凭证', 'UNAUTHENTICATED'));
-			}
+			// 使用统一工具函数提取 Token
+			const authHeader = getAuthTokenFromRequest(request);
 
 			const { id, old_password, new_password, repassword, random_code } = request.body;
 
@@ -293,6 +298,11 @@ export async function userRoutes(fastify: FastifyInstance) {
 				.code((response.code || 400) as 200 | 400 | 401 | 500)
 				.send(fail(response.msg || '修改密码失败', 'USER_SERVICE_ERROR'));
 		} catch (error) {
+			// 认证错误（由 getAuthTokenFromRequest 抛出）
+			if (error instanceof Error && error.message.includes('认证')) {
+				return reply.status(401).send(fail(error.message, 'UNAUTHORIZED'));
+			}
+
 			logger.error({ msg: '修改密码失败', error });
 			return reply.status(500).send(fail('服务器内部错误', 'INTERNAL_ERROR'));
 		}

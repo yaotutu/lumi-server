@@ -71,3 +71,43 @@ export function getUserFromRequest(request: FastifyRequest): {
 		userName: request.user?.userName || null,
 	};
 }
+
+/**
+ * 从请求头中获取 Authorization Token
+ *
+ * **用途**：
+ * - 用于调用需要认证的外部服务（如 Device Service、User Service 等）
+ * - 将前端用户的 Token 透传给外部服务
+ *
+ * **使用场景**：
+ * - 所有需要调用外部服务的 API 路由
+ * - 统一的 Token 提取逻辑，避免重复代码
+ *
+ * **使用示例**：
+ * ```typescript
+ * // Route 层
+ * fastify.get('/api/devices/products', async (request, reply) => {
+ *   const userId = getUserIdFromRequest(request);  // 验证用户身份
+ *   const token = getAuthTokenFromRequest(request); // 获取 Token（统一工具函数）
+ *
+ *   const result = await DeviceService.getProducts({ token, page: 0, size: 10 });
+ *   return reply.send(success(result));
+ * });
+ * ```
+ *
+ * @param request - Fastify 请求对象
+ * @returns Authorization Token（包含 "Bearer " 前缀）
+ * @throws Error 如果请求头中没有 Authorization（说明前端未传递 Token）
+ */
+export function getAuthTokenFromRequest(request: FastifyRequest): string {
+	const authToken = request.headers.authorization;
+
+	if (!authToken) {
+		// 这种情况说明：
+		// 1. 前端没有传递 Authorization header
+		// 2. 或者中间件配置错误（未正确传递 header）
+		throw new Error('缺少认证信息。请求头中未找到 Authorization Token。');
+	}
+
+	return authToken;
+}

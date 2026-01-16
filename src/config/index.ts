@@ -88,6 +88,9 @@ const envSchema = z.object({
 
 	// 切片服务配置
 	SLICER_SERVICE_URL: z.string().url().default('http://localhost:8010'),
+
+	// Device 服务配置
+	DEVICE_SERVICE_URL: z.string().url().optional(),
 });
 
 const parseResult = envSchema.safeParse(process.env);
@@ -191,6 +194,12 @@ export const config = {
 	// 切片服务配置
 	slicerService: {
 		url: env.SLICER_SERVICE_URL,
+		timeout: 30000, // HTTP 请求超时时间（30秒）
+	},
+
+	// Device 服务配置
+	deviceService: {
+		url: env.DEVICE_SERVICE_URL || 'http://localhost:8020',
 		timeout: 30000, // HTTP 请求超时时间（30秒）
 	},
 } as const;
