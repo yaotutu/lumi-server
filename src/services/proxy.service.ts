@@ -7,6 +7,7 @@
  */
 
 import AdmZip from 'adm-zip';
+import { ExternalAPIError, ValidationError } from '@/utils/errors';
 import { logger } from '@/utils/logger';
 
 /**
@@ -58,7 +59,7 @@ export async function proxyImage(imageUrl: string): Promise<{
 			status: response.status,
 			statusText: response.statusText,
 		});
-		throw new Error(`Failed to fetch image file: ${response.status}`);
+		throw new ExternalAPIError(`图片下载失败: HTTP ${response.status}`, 'ImageStorage');
 	}
 
 	// 获取原始 Content-Type，如果没有则默认为 image/png
@@ -98,7 +99,7 @@ function extractModelFromZip(buffer: Buffer): { buffer: Buffer; extension: strin
 			msg: 'ZIP 文件中未找到模型文件',
 			entries: zipEntries.map((e) => e.entryName),
 		});
-		throw new Error('No model file found in ZIP archive');
+		throw new ValidationError('ZIP 文件中未找到模型文件（支持 .obj, .glb, .gltf 格式）');
 	}
 
 	// 提取模型文件
@@ -108,7 +109,7 @@ function extractModelFromZip(buffer: Buffer): { buffer: Buffer; extension: strin
 			msg: 'ZIP 文件提取失败',
 			fileName: modelEntry.entryName,
 		});
-		throw new Error('Failed to read file from ZIP archive');
+		throw new ValidationError('ZIP 文件提取失败，请检查文件是否损坏');
 	}
 
 	const extension = modelEntry.entryName.split('.').pop()?.toLowerCase() || '';
@@ -209,7 +210,7 @@ export async function proxyModel(
 			status: response.status,
 			statusText: response.statusText,
 		});
-		throw new Error(`Failed to fetch model file: ${response.status}`);
+		throw new ExternalAPIError(`模型下载失败: HTTP ${response.status}`, 'TencentCOS');
 	}
 
 	// 获取文件数据
@@ -232,7 +233,7 @@ export async function proxyModel(
 			extension = extracted.extension;
 		} catch (error) {
 			logger.error({ msg: 'ZIP 解压失败', error });
-			throw new Error('Failed to extract ZIP file');
+			throw new ValidationError('ZIP 文件解压失败，请确保文件格式正确');
 		}
 	}
 

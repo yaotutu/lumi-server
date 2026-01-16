@@ -13,7 +13,9 @@ import type { FastifyInstance } from 'fastify';
 import { config } from '@/config/index.js';
 import { proxyImageSchema, proxyModelSchema } from '@/schemas/routes/proxy.schema';
 import * as ProxyService from '@/services/proxy.service';
+import { ExternalAPIError, ValidationError } from '@/utils/errors';
 import { logger } from '@/utils/logger';
+import { error as errorResponse, fail } from '@/utils/response';
 
 function getProxyBaseUrl(_request: {
 	protocol: string;
@@ -85,7 +87,16 @@ export async function proxyRoutes(fastify: FastifyInstance) {
 					.send(buffer);
 			} catch (error) {
 				logger.error({ msg: 'Image proxy error', error });
-				return reply.code(500).send({ error: 'Internal server error' });
+
+				// ✅ 统一错误处理：使用自定义错误类
+				if (error instanceof ValidationError) {
+					return reply.status(400).send(fail(error.message, error.code));
+				}
+				if (error instanceof ExternalAPIError) {
+					return reply.status(502).send(fail(error.message, error.code));
+				}
+				// 兜底处理：未知错误
+				return reply.status(500).send(errorResponse('代理请求失败', 'INTERNAL_ERROR'));
 			}
 		},
 	);
@@ -156,7 +167,16 @@ export async function proxyRoutes(fastify: FastifyInstance) {
 					.send(buffer);
 			} catch (error) {
 				logger.error({ msg: 'Model proxy error', error });
-				return reply.code(500).send({ error: 'Internal server error' });
+
+				// ✅ 统一错误处理：使用自定义错误类
+				if (error instanceof ValidationError) {
+					return reply.status(400).send(fail(error.message, error.code));
+				}
+				if (error instanceof ExternalAPIError) {
+					return reply.status(502).send(fail(error.message, error.code));
+				}
+				// 兜底处理：未知错误
+				return reply.status(500).send(errorResponse('代理请求失败', 'INTERNAL_ERROR'));
 			}
 		},
 	);

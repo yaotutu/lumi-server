@@ -10,8 +10,9 @@ import {
 	listModelsSchema,
 } from '@/schemas/routes/models.schema';
 import * as ModelService from '@/services/model.service';
+import { NotFoundError } from '@/utils/errors';
 import { logger } from '@/utils/logger';
-import { fail, success } from '@/utils/response';
+import { error as errorResponse, fail, success } from '@/utils/response';
 
 /**
  * 注册模型管理路由
@@ -38,7 +39,7 @@ export async function galleryModelRoutes(fastify: FastifyInstance) {
 			return reply.send(success(models));
 		} catch (error) {
 			logger.error({ msg: '获取公开模型列表失败', error });
-			return reply.code(500).send(fail('获取公开模型列表失败'));
+			return reply.status(500).send(errorResponse('获取公开模型列表失败', 'INTERNAL_ERROR'));
 		}
 	});
 
@@ -64,11 +65,11 @@ export async function galleryModelRoutes(fastify: FastifyInstance) {
 			} catch (error) {
 				logger.error({ msg: '获取模型详情失败', error, modelId: request.params.id });
 
-				if (error instanceof Error && error.message.includes('不存在')) {
-					return reply.status(404).send(fail(error.message));
+				// ✅ 统一错误处理：使用自定义错误类（替代字符串匹配）
+				if (error instanceof NotFoundError) {
+					return reply.status(404).send(fail(error.message, error.code));
 				}
-
-				return reply.code(500).send(fail('获取模型详情失败'));
+				return reply.status(500).send(errorResponse('获取模型详情失败', 'INTERNAL_ERROR'));
 			}
 		},
 	);
@@ -92,11 +93,11 @@ export async function galleryModelRoutes(fastify: FastifyInstance) {
 			} catch (error) {
 				logger.error({ msg: '增加下载计数失败', error, modelId: request.params.id });
 
-				if (error instanceof Error && error.message.includes('不存在')) {
-					return reply.status(404).send(fail(error.message));
+				// ✅ 统一错误处理：使用自定义错误类（替代字符串匹配）
+				if (error instanceof NotFoundError) {
+					return reply.status(404).send(fail(error.message, error.code));
 				}
-
-				return reply.code(500).send(fail('增加下载计数失败'));
+				return reply.status(500).send(errorResponse('增加下载计数失败', 'INTERNAL_ERROR'));
 			}
 		},
 	);

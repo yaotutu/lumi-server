@@ -10,8 +10,9 @@ import {
 	getInteractionsSchema,
 } from '@/schemas/routes/interactions.schema';
 import * as InteractionService from '@/services/interaction.service';
+import { NotFoundError, UnauthorizedError, ValidationError } from '@/utils/errors';
 import { logger } from '@/utils/logger';
-import { fail, success } from '@/utils/response';
+import { error as errorResponse, fail, success } from '@/utils/response';
 
 /**
  * 注册交互路由
@@ -66,7 +67,13 @@ export async function interactionRoutes(fastify: FastifyInstance) {
 					error,
 					modelId: request.params.id,
 				});
-				return reply.code(500).send(fail('获取交互状态失败'));
+
+				// ✅ 统一错误处理：使用自定义错误类
+				if (error instanceof NotFoundError) {
+					return reply.status(404).send(fail(error.message, error.code));
+				}
+				// 兜底处理：未知错误
+				return reply.status(500).send(errorResponse('获取交互状态失败', 'INTERNAL_ERROR'));
 			}
 		},
 	);
@@ -125,11 +132,18 @@ export async function interactionRoutes(fastify: FastifyInstance) {
 			} catch (error) {
 				logger.error({ msg: '交互操作失败', error, modelId: request.params.id });
 
-				if (error instanceof Error && error.message.includes('不存在')) {
-					return reply.status(404).send(fail(error.message));
+				// ✅ 统一错误处理：使用自定义错误类（替代字符串匹配）
+				if (error instanceof NotFoundError) {
+					return reply.status(404).send(fail(error.message, error.code));
 				}
-
-				return reply.code(500).send(fail('交互操作失败'));
+				if (error instanceof UnauthorizedError) {
+					return reply.status(401).send(fail(error.message, error.code));
+				}
+				if (error instanceof ValidationError) {
+					return reply.status(400).send(fail(error.message, error.code));
+				}
+				// 兜底处理：未知错误
+				return reply.status(500).send(errorResponse('交互操作失败', 'INTERNAL_ERROR'));
 			}
 		},
 	);
@@ -196,7 +210,13 @@ export async function interactionRoutes(fastify: FastifyInstance) {
 				);
 			} catch (error) {
 				logger.error({ msg: '批量查询交互状态失败', error });
-				return reply.code(500).send(fail('批量查询交互状态失败'));
+
+				// ✅ 统一错误处理：使用自定义错误类
+				if (error instanceof ValidationError) {
+					return reply.status(400).send(fail(error.message, error.code));
+				}
+				// 兜底处理：未知错误
+				return reply.status(500).send(errorResponse('批量查询交互状态失败', 'INTERNAL_ERROR'));
 			}
 		},
 	);

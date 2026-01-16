@@ -92,3 +92,16 @@ export class ExternalAPIError extends AppError {
 		super(message, 500, 'EXTERNAL_API_ERROR', details);
 	}
 }
+
+/**
+ * 未认证错误 (401 Unauthorized)
+ * 用于表示用户未提供有效的认证凭据（未登录）
+ * 与 UnauthorizedError 的区别：
+ * - UnauthenticatedError: 用户未登录
+ * - UnauthorizedError: Token无效或过期
+ */
+export class UnauthenticatedError extends AppError {
+	constructor(message = '未认证') {
+		super(message, 401, 'UNAUTHENTICATED');
+	}
+}

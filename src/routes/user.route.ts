@@ -56,7 +56,7 @@ export async function userRoutes(fastify: FastifyInstance) {
 				// 从 request.user 获取用户 ID（由认证中间件注入）
 				const userId = request.user?.id;
 				if (!userId) {
-					return reply.code(401).send(fail('请先登录', 'UNAUTHORIZED'));
+					return reply.status(401).send(fail('请先登录', 'UNAUTHORIZED'));
 				}
 
 				// 解析查询参数
@@ -83,7 +83,7 @@ export async function userRoutes(fastify: FastifyInstance) {
 				return reply.send(success(models));
 			} catch (error) {
 				logger.error({ msg: '获取用户收藏列表失败', error });
-				return reply.code(500).send(fail('获取用户收藏列表失败', 'INTERNAL_ERROR'));
+				return reply.status(500).send(fail('获取用户收藏列表失败', 'INTERNAL_ERROR'));
 			}
 		},
 	);
@@ -97,7 +97,7 @@ export async function userRoutes(fastify: FastifyInstance) {
 			// 从 request.user 获取用户 ID（由认证中间件注入）
 			const userId = request.user?.id;
 			if (!userId) {
-				return reply.code(401).send(fail('请先登录', 'UNAUTHORIZED'));
+				return reply.status(401).send(fail('请先登录', 'UNAUTHORIZED'));
 			}
 
 			// 解析查询参数
@@ -124,7 +124,7 @@ export async function userRoutes(fastify: FastifyInstance) {
 			return reply.send(success(models));
 		} catch (error) {
 			logger.error({ msg: '获取用户点赞列表失败', error });
-			return reply.code(500).send(fail('获取用户点赞列表失败', 'INTERNAL_ERROR'));
+			return reply.status(500).send(fail('获取用户点赞列表失败', 'INTERNAL_ERROR'));
 		}
 	});
 
@@ -137,7 +137,7 @@ export async function userRoutes(fastify: FastifyInstance) {
 			// 从 request.user 获取用户 ID（由认证中间件注入）
 			const userId = request.user?.id;
 			if (!userId) {
-				return reply.code(401).send(fail('请先登录', 'UNAUTHORIZED'));
+				return reply.status(401).send(fail('请先登录', 'UNAUTHORIZED'));
 			}
 
 			// 解析查询参数
@@ -168,7 +168,7 @@ export async function userRoutes(fastify: FastifyInstance) {
 			return reply.send(success(models));
 		} catch (error) {
 			logger.error({ msg: '获取用户创建的模型列表失败', error });
-			return reply.code(500).send(fail('获取用户创建的模型列表失败', 'INTERNAL_ERROR'));
+			return reply.status(500).send(fail('获取用户创建的模型列表失败', 'INTERNAL_ERROR'));
 		}
 	});
 
@@ -183,7 +183,7 @@ export async function userRoutes(fastify: FastifyInstance) {
 			try {
 				const authHeader = request.headers.authorization;
 				if (!authHeader) {
-					return reply.code(401).send(fail('未提供认证凭证', 'UNAUTHENTICATED'));
+					return reply.status(401).send(fail('未提供认证凭证', 'UNAUTHENTICATED'));
 				}
 
 				const { id } = request.params;
@@ -201,7 +201,7 @@ export async function userRoutes(fastify: FastifyInstance) {
 					.send(fail(response.msg || '获取用户信息失败', 'USER_SERVICE_ERROR'));
 			} catch (error) {
 				logger.error({ msg: '获取用户信息失败', error });
-				return reply.code(500).send(fail('服务器内部错误', 'INTERNAL_ERROR'));
+				return reply.status(500).send(fail('服务器内部错误', 'INTERNAL_ERROR'));
 			}
 		},
 	);
@@ -221,7 +221,7 @@ export async function userRoutes(fastify: FastifyInstance) {
 		try {
 			const authHeader = request.headers.authorization;
 			if (!authHeader) {
-				return reply.code(401).send(fail('未提供认证凭证', 'UNAUTHENTICATED'));
+				return reply.status(401).send(fail('未提供认证凭证', 'UNAUTHENTICATED'));
 			}
 
 			const { id, nick_name, avatar, gender } = request.body;
@@ -247,7 +247,7 @@ export async function userRoutes(fastify: FastifyInstance) {
 				.send(fail(response.msg || '更新用户信息失败', 'USER_SERVICE_ERROR'));
 		} catch (error) {
 			logger.error({ msg: '更新用户信息失败', error });
-			return reply.code(500).send(fail('服务器内部错误', 'INTERNAL_ERROR'));
+			return reply.status(500).send(fail('服务器内部错误', 'INTERNAL_ERROR'));
 		}
 	});
 
@@ -267,7 +267,7 @@ export async function userRoutes(fastify: FastifyInstance) {
 		try {
 			const authHeader = request.headers.authorization;
 			if (!authHeader) {
-				return reply.code(401).send(fail('未提供认证凭证', 'UNAUTHENTICATED'));
+				return reply.status(401).send(fail('未提供认证凭证', 'UNAUTHENTICATED'));
 			}
 
 			const { id, old_password, new_password, repassword, random_code } = request.body;
@@ -294,7 +294,7 @@ export async function userRoutes(fastify: FastifyInstance) {
 				.send(fail(response.msg || '修改密码失败', 'USER_SERVICE_ERROR'));
 		} catch (error) {
 			logger.error({ msg: '修改密码失败', error });
-			return reply.code(500).send(fail('服务器内部错误', 'INTERNAL_ERROR'));
+			return reply.status(500).send(fail('服务器内部错误', 'INTERNAL_ERROR'));
 		}
 	});
 }
