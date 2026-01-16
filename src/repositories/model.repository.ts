@@ -162,7 +162,7 @@ export class ModelRepository {
 			: eq(models.externalUserId, externalUserId);
 
 		// 根据排序方式选择排序字段
-		let orderBy;
+		let orderBy: ReturnType<typeof desc> | typeof models.name;
 		if (sortBy === 'latest') {
 			orderBy = desc(models.createdAt);
 		} else if (sortBy === 'name') {

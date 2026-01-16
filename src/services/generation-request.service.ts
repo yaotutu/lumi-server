@@ -21,6 +21,7 @@ import {
 } from '@/repositories';
 import { NotFoundError, ValidationError } from '@/utils/errors';
 import { logger } from '@/utils/logger';
+import { processUserPromptForImageGeneration } from './prompt-optimizer.service.js';
 import { storageService } from './storage.service.js';
 
 /**
@@ -195,6 +196,37 @@ export async function createRequest(userId: string, originalPrompt: string) {
 }
 
 /**
+ * 创建生成请求并异步触发后台处理（推荐使用）
+ *
+ * 工作流程：
+ * 1. 同步创建 GenerationRequest 和相关记录
+ * 2. 立即返回请求对象给前端
+ * 3. 使用 setImmediate 在后台异步处理提示词生成和任务入队
+ *
+ * @param userId 用户ID
+ * @param originalPrompt 用户原始输入的提示词
+ * @returns 创建的生成请求对象（包含关联的 Images 和 Jobs）
+ * @throws ValidationError - 提示词验证失败
+ */
+export async function createRequestAsync(userId: string, originalPrompt: string) {
+	// 步骤 1: 同步创建请求
+	const generationRequest = await createRequest(userId, originalPrompt);
+
+	// 步骤 2: 使用 setImmediate 触发后台异步处理（生成提示词 + 加入队列）
+	setImmediate(() => {
+		processPromptAndEnqueueJobs(generationRequest.id, originalPrompt.trim(), userId);
+	});
+
+	logger.info({
+		msg: '✅ 生成请求创建成功，后台任务已触发',
+		requestId: generationRequest.id,
+		imageCount: generationRequest.images.length,
+	});
+
+	return generationRequest;
+}
+
+/**
  * 异步处理：生成提示词变体并加入队列
  *
  * 业务流程:
@@ -222,7 +254,6 @@ export async function processPromptAndEnqueueJobs(
 		// 步骤 1: 调用 LLM 生成 4 个提示词变体
 		let promptVariants: string[];
 		try {
-			const { processUserPromptForImageGeneration } = await import('./prompt-optimizer.service.js');
 			const result = await processUserPromptForImageGeneration(originalPrompt);
 			promptVariants = result.prompts;
 
@@ -328,6 +359,11 @@ export async function processPromptAndEnqueueJobs(
  * @throws NotFoundError - 请求或图片不存在
  */
 export async function selectImageAndGenerateModel(requestId: string, selectedImageIndex: number) {
+	// 验证索引范围（0-3）
+	if (selectedImageIndex < 0 || selectedImageIndex > 3) {
+		throw new ValidationError('selectedImageIndex 必须在 0-3 之间');
+	}
+
 	// 验证生成请求存在
 	const request = await getRequestById(requestId);
 

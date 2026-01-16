@@ -9,13 +9,13 @@
  * 4. 设置正确的 Content-Type 和 CORS 头
  */
 
-import AdmZip from 'adm-zip';
 import type { FastifyInstance } from 'fastify';
 import { config } from '@/config/index.js';
 import { proxyImageSchema, proxyModelSchema } from '@/schemas/routes/proxy.schema';
+import * as ProxyService from '@/services/proxy.service';
 import { logger } from '@/utils/logger';
 
-function getProxyBaseUrl(request: {
+function getProxyBaseUrl(_request: {
 	protocol: string;
 	hostname: string;
 	headers: Record<string, string | string[] | undefined>;
@@ -49,21 +49,17 @@ export async function proxyRoutes(fastify: FastifyInstance) {
 					return reply.status(400).send({ error: 'Missing image URL parameter' });
 				}
 
-				// 验证URL是允许的域名（安全检查，防止代理被滥用）
-				// 支持两种格式：
-				// 1. 图片生成 API 的临时 URL：xxx.aliyuncs.com, xxx.siliconflow.cn 等
-				// 2. 我们自己的 COS：xxx.myqcloud.com
-				let isAllowed = false;
+				// 验证URL格式
+				let _isValidUrl = false;
 				try {
-					const url = new URL(imageUrl);
-					// 检查是否包含允许的域名
-					isAllowed =
-						url.hostname.includes('.myqcloud.com') || // 腾讯云 COS
-						url.hostname.includes('.aliyuncs.com') || // 阿里云 OSS（阿里云图片生成）
-						url.hostname.includes('.siliconflow.cn'); // SiliconFlow（图片生成）
+					new URL(imageUrl);
+					_isValidUrl = true;
 				} catch {
 					return reply.status(400).send({ error: 'Invalid URL format' });
 				}
+
+				// ✅ 调用 Service 验证 URL 是否来自允许的域名（已重构到 Service 层）
+				const isAllowed = ProxyService.validateImageUrl(imageUrl);
 
 				if (!isAllowed) {
 					return reply.status(403).send({
@@ -72,26 +68,8 @@ export async function proxyRoutes(fastify: FastifyInstance) {
 					});
 				}
 
-				// 从源获取图片文件
-				const response = await fetch(imageUrl);
-
-				// 检查响应状态
-				if (!response.ok) {
-					logger.error({
-						msg: 'Failed to fetch image',
-						url: imageUrl,
-						status: response.status,
-						statusText: response.statusText,
-					});
-					return reply.status(response.status).send({ error: 'Failed to fetch image file' });
-				}
-
-				// 获取原始 Content-Type，如果没有则默认为 image/png
-				const contentType = response.headers.get('content-type') || 'image/png';
-
-				// 获取文件数据
-				const arrayBuffer = await response.arrayBuffer();
-				const buffer = Buffer.from(arrayBuffer);
+				// ✅ 调用 Service 代理图片（已重构到 Service 层）
+				const { buffer, contentType } = await ProxyService.proxyImage(imageUrl);
 
 				// 返回文件流，设置正确的Content-Type
 				return reply
@@ -142,19 +120,15 @@ export async function proxyRoutes(fastify: FastifyInstance) {
 					return reply.status(400).send({ error: 'Missing model URL parameter' });
 				}
 
-				// 验证URL是腾讯云COS域名（安全检查，防止代理被滥用）
-				// 支持两种格式：
-				// 1. 腾讯云混元 3D：xxx.tencentcos.cn
-				// 2. 我们自己的 COS：xxx.myqcloud.com
-				let isAllowed = false;
+				// 验证URL格式
 				try {
-					const url = new URL(modelUrl);
-					// 检查是否包含腾讯云相关域名
-					isAllowed =
-						url.hostname.includes('.tencentcos.cn') || url.hostname.includes('.myqcloud.com');
+					new URL(modelUrl);
 				} catch {
 					return reply.status(400).send({ error: 'Invalid URL format' });
 				}
+
+				// ✅ 调用 Service 验证 URL 是否来自允许的域名（已重构到 Service 层）
+				const isAllowed = ProxyService.validateModelUrl(modelUrl);
 
 				if (!isAllowed) {
 					return reply.status(403).send({
@@ -162,162 +136,11 @@ export async function proxyRoutes(fastify: FastifyInstance) {
 					});
 				}
 
-				// 从腾讯云获取模型文件
-				const response = await fetch(modelUrl);
-
-				// 检查响应状态
-				if (!response.ok) {
-					logger.error({
-						msg: 'Failed to fetch model from Tencent COS',
-						status: response.status,
-						statusText: response.statusText,
-					});
-					return reply.status(response.status).send({ error: 'Failed to fetch model file' });
-				}
-
-				// 获取文件数据
-				const arrayBuffer = await response.arrayBuffer();
-				let buffer = Buffer.from(arrayBuffer);
-
-				// 根据文件扩展名确定 Content-Type
-				let extension = modelUrl.split('.').pop()?.toLowerCase() || '';
-				let contentType = 'application/octet-stream'; // 默认二进制流
-
-				// ✅ 检查是否是 ZIP 文件（腾讯云混元 3D 返回的是 ZIP 文件）
-				const isZipFile = extension === 'zip' || buffer.toString('utf8', 0, 2) === 'PK';
-
-				if (isZipFile) {
-					logger.info({ msg: '检测到 ZIP 文件，开始解压', url: modelUrl });
-
-					try {
-						// 使用 adm-zip 解压 ZIP 文件
-						const zip = new AdmZip(buffer);
-						const zipEntries = zip.getEntries();
-
-						logger.info({
-							msg: 'ZIP 文件内容',
-							entries: zipEntries.map((entry) => entry.entryName),
-						});
-
-						// 查找模型文件（OBJ, GLB, GLTF）
-						const modelEntry = zipEntries.find((entry) => {
-							const entryExt = entry.entryName.split('.').pop()?.toLowerCase();
-							return entryExt === 'obj' || entryExt === 'glb' || entryExt === 'gltf';
-						});
-
-						if (!modelEntry) {
-							logger.error({
-								msg: 'ZIP 文件中未找到模型文件',
-								entries: zipEntries.map((e) => e.entryName),
-							});
-							return reply.status(400).send({ error: 'No model file found in ZIP archive' });
-						}
-
-						// 提取模型文件
-						const extractedBuffer = zip.readFile(modelEntry);
-						if (!extractedBuffer) {
-							logger.error({
-								msg: 'ZIP 文件提取失败',
-								fileName: modelEntry.entryName,
-							});
-							return reply.status(500).send({ error: 'Failed to read file from ZIP archive' });
-						}
-						buffer = Buffer.from(extractedBuffer);
-						extension = modelEntry.entryName.split('.').pop()?.toLowerCase() || '';
-
-						logger.info({
-							msg: '✅ 从 ZIP 中提取模型文件',
-							fileName: modelEntry.entryName,
-							size: `${buffer.length} bytes`,
-						});
-					} catch (error) {
-						logger.error({ msg: 'ZIP 解压失败', error });
-						return reply.status(500).send({ error: 'Failed to extract ZIP file' });
-					}
-				}
-
-				// 根据实际文件扩展名确定 Content-Type
-				if (extension === 'glb') {
-					contentType = 'model/gltf-binary';
-				} else if (extension === 'gltf') {
-					contentType = 'model/gltf+json';
-				} else if (extension === 'obj') {
-					// OBJ 文件调试：检查文件头
-					const fileHeader = buffer.toString('utf8', 0, Math.min(100, buffer.length));
-					logger.info({ msg: 'OBJ 文件头', fileHeader });
-					logger.info({ msg: 'OBJ 文件大小', size: `${buffer.length} bytes` });
-
-					// 检查是否是有效的 OBJ 文件（应该包含 'v ' 或 'f ' 等标记）
-					if (!fileHeader.includes('v ') && !fileHeader.includes('f ')) {
-						logger.warn({ msg: '警告: OBJ 文件格式可能不正确' });
-					}
-
-					contentType = 'text/plain'; // OBJ 是文本格式
-				} else if (extension === 'mtl') {
-					// MTL 材质文件（文本格式）
-					contentType = 'text/plain';
-
-					// ✅ 处理 MTL 文件中的纹理路径
-					// MTL 文件中的纹理引用是相对路径（如 material.png），需要替换为完整的代理 URL
-					try {
-						const mtlContent = buffer.toString('utf8');
-
-						// 从原始 URL 中提取基础路径（去掉文件名）
-						const baseUrl = modelUrl.substring(0, modelUrl.lastIndexOf('/'));
-
-						// 替换所有纹理引用的相对路径
-						// 匹配格式：map_Kd material.png, map_Ka texture.jpg 等
-						const updatedMtlContent = mtlContent.replace(
-							/(map_\w+|bump)\s+(\S+)/g,
-							(match, mapType, texturePath) => {
-								// 如果已经是完整 URL，不处理
-								if (texturePath.startsWith('http://') || texturePath.startsWith('https://')) {
-									return match;
-								}
-
-								// 构建完整的云存储 URL
-								const fullTextureUrl = `${baseUrl}/${texturePath}`;
-
-								// 构建代理 URL
-								const proxyUrl = `${getProxyBaseUrl(request)}/api/proxy/model?url=${encodeURIComponent(
-									fullTextureUrl,
-								)}`;
-
-								logger.info({
-									msg: '🔄 替换 MTL 纹理路径',
-									original: texturePath,
-									fullUrl: fullTextureUrl,
-									proxyUrl,
-								});
-
-								return `${mapType} ${proxyUrl}`;
-							},
-						);
-
-						buffer = Buffer.from(updatedMtlContent, 'utf8');
-
-						logger.info({
-							msg: '✅ MTL 文件纹理路径已替换',
-							originalSize: mtlContent.length,
-							newSize: buffer.length,
-						});
-					} catch (error) {
-						logger.error({ msg: '❌ MTL 文件路径替换失败', error });
-						// 失败时返回原始内容
-					}
-				} else if (extension === 'fbx') {
-					contentType = 'application/octet-stream';
-				}
-				// 图片格式（纹理）
-				else if (extension === 'png') {
-					contentType = 'image/png';
-				} else if (extension === 'jpg' || extension === 'jpeg') {
-					contentType = 'image/jpeg';
-				} else if (extension === 'gif') {
-					contentType = 'image/gif';
-				} else if (extension === 'webp') {
-					contentType = 'image/webp';
-				}
+				// ✅ 调用 Service 代理模型（已重构到 Service 层）
+				const { buffer, contentType } = await ProxyService.proxyModel(
+					modelUrl,
+					getProxyBaseUrl(request),
+				);
 
 				// 返回文件流，设置正确的Content-Type
 				return reply

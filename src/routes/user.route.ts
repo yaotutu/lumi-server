@@ -21,7 +21,6 @@
 import type { FastifyInstance } from 'fastify';
 import { getUserServiceClient } from '@/clients/user-service.client';
 import config from '@/config/index';
-import { modelRepository } from '@/repositories';
 import {
 	getUserByIdSchema,
 	getUserFavoritesSchema,
@@ -31,6 +30,7 @@ import {
 	updateUserSchema,
 } from '@/schemas/routes/users.schema';
 import * as InteractionService from '@/services/interaction.service';
+import * as ModelService from '@/services/model.service';
 import { logger } from '@/utils/logger';
 import { fail, success } from '@/utils/response';
 
@@ -151,10 +151,10 @@ export async function userRoutes(fastify: FastifyInstance) {
 			const limit = query.limit ? Number.parseInt(query.limit, 10) : 20;
 			const offset = query.offset ? Number.parseInt(query.offset, 10) : 0;
 
-			// 调用 Model Repository 获取用户创建的模型列表
-			const models = await modelRepository.findByUserId(userId, {
+			// ✅ 调用 Model Service 获取用户创建的模型列表（已重构到 Service 层）
+			const models = await ModelService.getUserModels(userId, {
 				visibility: query.visibility,
-				sortBy: query.sortBy || 'latest',
+				sortBy: query.sortBy,
 				limit,
 				offset,
 			});

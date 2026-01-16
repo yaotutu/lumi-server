@@ -25,7 +25,7 @@ import {
 	registerSchema,
 	sendCodeSchema,
 } from '@/schemas/auth.schema';
-import { UserStatsService } from '@/services';
+import * as AuthService from '@/services/auth.service';
 import { logger } from '@/utils/logger';
 import { fail, success } from '@/utils/response';
 
@@ -132,83 +132,11 @@ export async function authRoutes(fastify: FastifyInstance) {
 		try {
 			// 从 Authorization header 获取 Token
 			const authHeader = request.headers.authorization;
-			if (!authHeader) {
-				return reply.send(
-					success({
-						status: 'unauthenticated',
-						user: null,
-					}),
-				);
-			}
 
-			// 使用 UserServiceClient 获取用户信息
-			const response = await userClient.getUserInfo(authHeader);
+			// ✅ 调用 Service 获取用户资料（已重构到 Service 层）
+			const profile = await AuthService.getUserProfile(authHeader);
 
-			if (response.code === 200 && response.data) {
-				// 构建 user 对象，只包含必需字段
-				const userData: Record<string, any> = {
-					id: response.data.user_id,
-					userName: response.data.user_name,
-					nickName: response.data.nick_name,
-				};
-
-				// 添加可选字段（仅在存在时）
-				if (response.data.email) {
-					userData.email = response.data.email;
-				}
-				if (response.data.avatar !== undefined) {
-					userData.avatar = response.data.avatar || null;
-				}
-				if (response.data.gender) {
-					userData.gender = response.data.gender;
-				}
-
-				// 获取用户统计数据
-				// 如果统计数据查询失败，使用默认值（全部为 0）
-				let stats = null;
-				try {
-					stats = await UserStatsService.getUserStats(response.data.user_id);
-				} catch (statsError) {
-					// 统计数据查询失败时，记录警告日志，但不影响用户基本信息的返回
-					logger.warn({
-						msg: '获取用户统计数据失败，使用默认值',
-						userId: response.data.user_id,
-						error: statsError,
-					});
-					// 使用默认统计数据（全部为 0）
-					stats = {
-						totalModels: 0,
-						publicModels: 0,
-						privateModels: 0,
-						totalLikes: 0,
-						totalFavorites: 0,
-						totalViews: 0,
-						totalDownloads: 0,
-						likedModelsCount: 0,
-						favoritedModelsCount: 0,
-						totalRequests: 0,
-						completedRequests: 0,
-						failedRequests: 0,
-					};
-				}
-
-				// 将统计数据添加到用户对象中
-				userData.stats = stats;
-
-				return reply.send(
-					success({
-						status: 'authenticated',
-						user: userData,
-					}),
-				);
-			}
-
-			return reply.send(
-				success({
-					status: 'unauthenticated',
-					user: null,
-				}),
-			);
+			return reply.send(success(profile));
 		} catch (error) {
 			logger.error({ msg: '获取用户信息失败', error });
 			// 注意：即使出错，也返回 200 状态码 + success 格式

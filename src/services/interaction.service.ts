@@ -118,3 +118,51 @@ export async function getBatchInteractions(
 
 	return result;
 }
+
+/**
+ * 统一的交互切换方法（从 Router 搬运过来的逻辑）
+ * 处理点赞或收藏操作，并返回完整的计数信息
+ *
+ * @param userId 用户 ID
+ * @param modelId 模型 ID
+ * @param type 交互类型（LIKE 或 FAVORITE）
+ * @returns 交互结果，包含是否交互、类型、点赞数、收藏数
+ */
+export async function toggleInteraction(
+	userId: string,
+	modelId: string,
+	type: 'LIKE' | 'FAVORITE',
+): Promise<{
+	isInteracted: boolean;
+	type: string;
+	likeCount: number;
+	favoriteCount: number;
+}> {
+	// 👇 从 Router 搬运的逻辑（原封不动）
+	let isInteracted: boolean;
+	let likeCount: number;
+	let favoriteCount: number;
+
+	if (type === 'LIKE') {
+		const result = await toggleLike(userId, modelId);
+		isInteracted = result.liked;
+		likeCount = result.likeCount;
+		// 获取最新的 favoriteCount
+		const modelData = await modelRepository.findById(modelId);
+		favoriteCount = modelData?.favoriteCount || 0;
+	} else {
+		const result = await toggleFavorite(userId, modelId);
+		isInteracted = result.favorited;
+		favoriteCount = result.favoriteCount;
+		// 获取最新的 likeCount
+		const modelData = await modelRepository.findById(modelId);
+		likeCount = modelData?.likeCount || 0;
+	}
+
+	return {
+		isInteracted,
+		type,
+		likeCount,
+		favoriteCount,
+	};
+}

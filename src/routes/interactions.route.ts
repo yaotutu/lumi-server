@@ -107,51 +107,21 @@ export async function interactionRoutes(fastify: FastifyInstance) {
 					return reply.status(400).send(fail('type 必须是 LIKE 或 FAVORITE'));
 				}
 
-				// 执行交互操作
-				let isInteracted: boolean;
-				let likeCount: number;
-				let favoriteCount: number;
-
-				if (type === 'LIKE') {
-					const result = await InteractionService.toggleLike(userId, modelId);
-					isInteracted = result.liked;
-					likeCount = result.likeCount;
-					// 获取最新的 favoriteCount
-					const _model = await InteractionService.getUserInteractionStatus(userId, modelId);
-					const modelData = await import('@/repositories').then((m) =>
-						m.modelRepository.findById(modelId),
-					);
-					favoriteCount = modelData?.favoriteCount || 0;
-				} else {
-					const result = await InteractionService.toggleFavorite(userId, modelId);
-					isInteracted = result.favorited;
-					favoriteCount = result.favoriteCount;
-					// 获取最新的 likeCount
-					const modelData = await import('@/repositories').then((m) =>
-						m.modelRepository.findById(modelId),
-					);
-					likeCount = modelData?.likeCount || 0;
-				}
+				// ✅ 调用 Service 统一处理交互逻辑（已重构到 Service 层）
+				const result = await InteractionService.toggleInteraction(userId, modelId, type);
 
 				logger.info({
 					msg: '✅ 用户交互操作',
 					userId,
 					modelId,
 					type,
-					isInteracted,
-					likeCount,
-					favoriteCount,
+					isInteracted: result.isInteracted,
+					likeCount: result.likeCount,
+					favoriteCount: result.favoriteCount,
 				});
 
 				// JSend success 格式
-				return reply.send(
-					success({
-						isInteracted,
-						type,
-						likeCount,
-						favoriteCount,
-					}),
-				);
+				return reply.send(success(result));
 			} catch (error) {
 				logger.error({ msg: '交互操作失败', error, modelId: request.params.id });
 

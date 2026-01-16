@@ -29,8 +29,28 @@ export async function getModelById(modelId: string) {
 	return model;
 }
 
-export async function getUserModels(userId: string, options?: { limit?: number; offset?: number }) {
-	return modelRepository.findByUserId(userId, options);
+/**
+ * 获取用户模型列表（基础版本）
+ * 从 user.route.ts 搬运过来的逻辑
+ */
+export async function getUserModels(
+	userId: string,
+	options?: {
+		visibility?: 'PUBLIC' | 'PRIVATE';
+		sortBy?: 'latest' | 'name' | 'popular';
+		limit?: number;
+		offset?: number;
+	},
+) {
+	// 👇 从 Router 搬运的逻辑（原封不动）
+	const models = await modelRepository.findByUserId(userId, {
+		visibility: options?.visibility,
+		sortBy: options?.sortBy || 'latest',
+		limit: options?.limit,
+		offset: options?.offset,
+	});
+
+	return models;
 }
 
 /**

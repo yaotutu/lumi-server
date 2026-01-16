@@ -104,28 +104,11 @@ export async function taskRoutes(fastify: FastifyInstance) {
 			const userId = getUserIdFromRequest(request);
 			const { prompt } = request.body;
 
-			// 验证提示词
-			if (!prompt || prompt.trim().length === 0) {
-				throw new ValidationError('提示词不能为空');
-			}
-
-			// ✅ 创建生成请求（快速返回，不等待 LLM 和队列）
-			const generationRequest = await GenerationRequestService.createRequest(userId, prompt.trim());
-
-			// ✅ 使用 setImmediate 触发后台异步处理（生成提示词 + 加入队列）
-			setImmediate(() => {
-				GenerationRequestService.processPromptAndEnqueueJobs(
-					generationRequest.id,
-					prompt.trim(),
-					userId,
-				);
-			});
-
-			logger.info({
-				msg: '✅ 生成请求创建成功，后台任务已触发',
-				requestId: generationRequest.id,
-				imageCount: generationRequest.images.length,
-			});
+			// ✅ 调用 Service 创建请求并异步触发后台处理（已重构到 Service 层）
+			const generationRequest = await GenerationRequestService.createRequestAsync(
+				userId,
+				prompt.trim(),
+			);
 
 			// JSend success 格式 - 立即返回 generationRequest（此时 imagePrompt 为 null，后续异步填充）
 			return reply.status(201).send(success(generationRequest));
