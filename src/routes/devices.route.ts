@@ -176,7 +176,9 @@ export async function devicesRoutes(fastify: FastifyInstance) {
 			}
 
 			// 服务器错误
-			return reply.status(500).send(fail('获取打印机列表失败，请稍后重试', 'INTERNAL_SERVER_ERROR'));
+			return reply
+				.status(500)
+				.send(fail('获取打印机列表失败，请稍后重试', 'INTERNAL_SERVER_ERROR'));
 		}
 	});
 
@@ -257,7 +259,9 @@ export async function devicesRoutes(fastify: FastifyInstance) {
 			}
 
 			// 服务器错误
-			return reply.status(500).send(fail('获取打印机详情失败，请稍后重试', 'INTERNAL_SERVER_ERROR'));
+			return reply
+				.status(500)
+				.send(fail('获取打印机详情失败，请稍后重试', 'INTERNAL_SERVER_ERROR'));
 		}
 	});
 

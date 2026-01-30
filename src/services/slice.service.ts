@@ -45,15 +45,26 @@ export async function createSliceTask(
 		throw new ValidationError('模型不存在');
 	}
 
-	// 检查模型所有权
-	if (model.externalUserId !== userId) {
+	// 检查模型访问权限：私有模型只能所有者访问，公开模型任何人都可以访问
+	if (model.visibility === 'PRIVATE' && model.externalUserId !== userId) {
 		logger.warn({
-			msg: '⚠️ 无权访问该模型',
+			msg: '⚠️ 无权访问该私有模型',
+			modelId,
+			userId,
+			modelOwner: model.externalUserId,
+			visibility: model.visibility,
+		});
+		throw new ValidationError('无权访问该私有模型');
+	}
+
+	// 记录公开模型的访问日志
+	if (model.visibility === 'PUBLIC' && model.externalUserId !== userId) {
+		logger.info({
+			msg: '✅ 访问公开模型',
 			modelId,
 			userId,
 			modelOwner: model.externalUserId,
 		});
-		throw new ValidationError('无权访问该模型');
 	}
 
 	// 第 3 步：检查模型是否已生成完成
@@ -244,7 +255,12 @@ export async function getSliceTaskStatus(sliceTaskId: string) {
 	return {
 		sliceTaskId: statusResponse.id,
 		modelId: model.id, // ✅ 从数据库获取
-		sliceStatus: statusResponse.status as 'PENDING' | 'FETCHING' | 'PROCESSING' | 'COMPLETED' | 'FAILED', // ✅ 映射为 sliceStatus
+		sliceStatus: statusResponse.status as
+			| 'PENDING'
+			| 'FETCHING'
+			| 'PROCESSING'
+			| 'COMPLETED'
+			| 'FAILED', // ✅ 映射为 sliceStatus
 		gcodeUrl: statusResponse.gcode_download_url || null,
 		gcodeMetadata: statusResponse.gcode_metadata || null,
 		errorMessage: statusResponse.error_message || null,

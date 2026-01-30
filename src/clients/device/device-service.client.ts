@@ -290,10 +290,7 @@ export class DeviceServiceClient extends DeviceServiceBaseClient {
 	 * }, 'Bearer xxx');
 	 * ```
 	 */
-	async bindPrinter(
-		params: { device_name: string; code: string },
-		token: string,
-	): Promise<void> {
+	async bindPrinter(params: { device_name: string; code: string }, token: string): Promise<void> {
 		// 构建完整端点
 		const endpoint = '/api/v1.0/my/device/bind';
 
