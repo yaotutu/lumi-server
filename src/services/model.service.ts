@@ -29,8 +29,31 @@ export async function getModelById(modelId: string) {
 	return model;
 }
 
-export async function getUserModels(userId: string, options?: { limit?: number; offset?: number }) {
-	return modelRepository.findByUserId(userId, options);
+/**
+ * 获取用户模型列表
+ *
+ * @param userId 用户 ID
+ * @param options 查询选项（可见性、排序方式、分页参数）
+ * @returns 模型列表
+ */
+export async function getUserModels(
+	userId: string,
+	options?: {
+		visibility?: 'PUBLIC' | 'PRIVATE';
+		sortBy?: 'latest' | 'name' | 'popular';
+		limit?: number;
+		offset?: number;
+	},
+) {
+	// 调用 Repository 获取用户创建的模型列表
+	const models = await modelRepository.findByUserId(userId, {
+		visibility: options?.visibility,
+		sortBy: options?.sortBy || 'latest',
+		limit: options?.limit,
+		offset: options?.offset,
+	});
+
+	return models;
 }
 
 /**

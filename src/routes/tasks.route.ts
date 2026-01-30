@@ -15,10 +15,16 @@ import {
 	submitPrintSchema,
 } from '@/schemas/routes/tasks.schema';
 import * as GenerationRequestService from '@/services/generation-request.service';
-import { ValidationError } from '@/utils/errors';
+import {
+	ForbiddenError,
+	InvalidStateError,
+	NotFoundError,
+	UnauthorizedError,
+	ValidationError,
+} from '@/utils/errors';
 import { logger } from '@/utils/logger';
 import { getUserIdFromRequest } from '@/utils/request-auth';
-import { fail, success } from '@/utils/response';
+import { error as errorResponse, fail, success } from '@/utils/response';
 
 /**
  * 注册生成请求路由
@@ -55,13 +61,13 @@ export async function taskRoutes(fastify: FastifyInstance) {
 				}),
 			);
 		} catch (error) {
-			// 检查是否是认证错误
-			if (error instanceof Error && error.message.includes('未认证')) {
-				return reply.code(401).send(fail('请先登录', 'UNAUTHORIZED'));
+			// ✅ 统一错误处理：使用自定义错误类（替代字符串匹配）
+			if (error instanceof UnauthorizedError) {
+				return reply.status(401).send(fail(error.message, error.code));
 			}
 
 			logger.error({ msg: '获取生成请求列表失败', error });
-			return reply.code(500).send(fail('获取生成请求列表失败'));
+			return reply.status(500).send(errorResponse('获取生成请求列表失败', 'INTERNAL_ERROR'));
 		}
 	});
 
@@ -82,11 +88,11 @@ export async function taskRoutes(fastify: FastifyInstance) {
 			} catch (error) {
 				logger.error({ msg: '获取生成请求详情失败', error, requestId: request.params.id });
 
-				if (error instanceof Error && error.message.includes('不存在')) {
-					return reply.status(404).send(fail(error.message));
+				// ✅ 统一错误处理：使用自定义错误类（替代字符串匹配）
+				if (error instanceof NotFoundError) {
+					return reply.status(404).send(fail(error.message, error.code));
 				}
-
-				return reply.code(500).send(fail('获取生成请求详情失败'));
+				return reply.status(500).send(errorResponse('获取生成请求详情失败', 'INTERNAL_ERROR'));
 			}
 		},
 	);
@@ -104,28 +110,11 @@ export async function taskRoutes(fastify: FastifyInstance) {
 			const userId = getUserIdFromRequest(request);
 			const { prompt } = request.body;
 
-			// 验证提示词
-			if (!prompt || prompt.trim().length === 0) {
-				throw new ValidationError('提示词不能为空');
-			}
-
-			// ✅ 创建生成请求（快速返回，不等待 LLM 和队列）
-			const generationRequest = await GenerationRequestService.createRequest(userId, prompt.trim());
-
-			// ✅ 使用 setImmediate 触发后台异步处理（生成提示词 + 加入队列）
-			setImmediate(() => {
-				GenerationRequestService.processPromptAndEnqueueJobs(
-					generationRequest.id,
-					prompt.trim(),
-					userId,
-				);
-			});
-
-			logger.info({
-				msg: '✅ 生成请求创建成功，后台任务已触发',
-				requestId: generationRequest.id,
-				imageCount: generationRequest.images.length,
-			});
+			// ✅ 调用 Service 创建请求并异步触发后台处理（已重构到 Service 层）
+			const generationRequest = await GenerationRequestService.createRequestAsync(
+				userId,
+				prompt.trim(),
+			);
 
 			// JSend success 格式 - 立即返回 generationRequest（此时 imagePrompt 为 null，后续异步填充）
 			return reply.status(201).send(success(generationRequest));
@@ -182,15 +171,17 @@ export async function taskRoutes(fastify: FastifyInstance) {
 		} catch (error) {
 			logger.error({ msg: '选择图片触发3D生成失败', error, requestId: request.params.id });
 
+			// ✅ 统一错误处理：使用自定义错误类（替代字符串匹配）
 			if (error instanceof ValidationError) {
-				return reply.status(400).send(fail(error.message));
+				return reply.status(400).send(fail(error.message, error.code));
 			}
-
-			if (error instanceof Error && error.message.includes('不存在')) {
-				return reply.status(404).send(fail(error.message));
+			if (error instanceof NotFoundError) {
+				return reply.status(404).send(fail(error.message, error.code));
 			}
-
-			return reply.code(500).send(fail('选择图片触发3D生成失败'));
+			if (error instanceof InvalidStateError) {
+				return reply.status(409).send(fail(error.message, error.code));
+			}
+			return reply.status(500).send(errorResponse('选择图片触发3D生成失败', 'INTERNAL_ERROR'));
 		}
 	});
 
@@ -213,15 +204,14 @@ export async function taskRoutes(fastify: FastifyInstance) {
 			} catch (error) {
 				logger.error({ msg: '删除生成请求失败', error, requestId: request.params.id });
 
-				if (error instanceof Error && error.message.includes('不存在')) {
-					return reply.status(404).send(fail(error.message));
+				// ✅ 统一错误处理：使用自定义错误类（替代字符串匹配）
+				if (error instanceof NotFoundError) {
+					return reply.status(404).send(fail(error.message, error.code));
 				}
-
-				if (error instanceof Error && error.message.includes('无权限')) {
-					return reply.status(403).send(fail(error.message));
+				if (error instanceof ForbiddenError) {
+					return reply.status(403).send(fail(error.message, error.code));
 				}
-
-				return reply.code(500).send(fail('删除生成请求失败'));
+				return reply.status(500).send(errorResponse('删除生成请求失败', 'INTERNAL_ERROR'));
 			}
 		},
 	);
@@ -258,15 +248,14 @@ export async function taskRoutes(fastify: FastifyInstance) {
 			} catch (error) {
 				logger.error({ msg: '提交打印任务失败', error, requestId: request.params.id });
 
+				// ✅ 统一错误处理：使用自定义错误类（替代字符串匹配）
 				if (error instanceof ValidationError) {
-					return reply.status(400).send(fail(error.message));
+					return reply.status(400).send(fail(error.message, error.code));
 				}
-
-				if (error instanceof Error && error.message.includes('不存在')) {
-					return reply.status(404).send(fail(error.message));
+				if (error instanceof NotFoundError) {
+					return reply.status(404).send(fail(error.message, error.code));
 				}
-
-				return reply.code(500).send(fail('提交打印任务失败'));
+				return reply.status(500).send(errorResponse('提交打印任务失败', 'INTERNAL_ERROR'));
 			}
 		},
 	);
@@ -295,11 +284,11 @@ export async function taskRoutes(fastify: FastifyInstance) {
 			} catch (error) {
 				logger.error({ msg: '查询打印状态失败', error, requestId: request.params.id });
 
-				if (error instanceof Error && error.message.includes('不存在')) {
-					return reply.status(404).send(fail(error.message));
+				// ✅ 统一错误处理：使用自定义错误类（替代字符串匹配）
+				if (error instanceof NotFoundError) {
+					return reply.status(404).send(fail(error.message, error.code));
 				}
-
-				return reply.code(500).send(fail('查询打印状态失败'));
+				return reply.status(500).send(errorResponse('查询打印状态失败', 'INTERNAL_ERROR'));
 			}
 		},
 	);
@@ -342,11 +331,11 @@ export async function taskRoutes(fastify: FastifyInstance) {
 		} catch (error) {
 			logger.error({ msg: '查询任务状态失败（轮询）', error, taskId: id });
 
-			if (error instanceof Error && error.message.includes('不存在')) {
-				return reply.code(404).send(fail('任务不存在'));
+			// ✅ 统一错误处理：使用自定义错误类（替代字符串匹配）
+			if (error instanceof NotFoundError) {
+				return reply.status(404).send(fail(error.message, error.code));
 			}
-
-			return reply.code(500).send(fail('查询任务状态失败'));
+			return reply.status(500).send(errorResponse('查询任务状态失败', 'INTERNAL_ERROR'));
 		}
 	});
 }

@@ -3,13 +3,17 @@
  *
  * 职责:
  * - 验证码生成和验证（临时方案）
+ * - 用户信息获取和构建
  *
  * @note 临时方案：验证码固定为 "0000"，待对接独立邮件系统
  * @deprecated 用户管理已迁移到外部服务，本文件保留仅用于验证码功能
  */
 
+import { getUserServiceClient } from '@/clients/user';
+import config from '@/config/index';
 import { ValidationError } from '@/utils/errors';
 import { logger } from '@/utils/logger';
+import * as UserStatsService from './user-stats.service.js';
 
 /**
  * 发送验证码
@@ -67,4 +71,98 @@ export async function verifyCodeAndLogin(email: string, code: string) {
 
 	// 返回邮箱，由调用方决定如何处理（如调用外部用户服务）
 	return { email };
+}
+
+/**
+ * 获取当前用户信息（从 auth.route.ts 搬运过来的逻辑）
+ * 包含用户基本信息和统计数据
+ *
+ * @param authHeader Authorization header (Bearer token)
+ * @returns 用户资料对象，包含状态、用户信息和统计数据
+ */
+export async function getUserProfile(authHeader: string | undefined): Promise<{
+	status: 'authenticated' | 'unauthenticated' | 'error';
+	user: Record<string, unknown> | null;
+}> {
+	try {
+		// 👇 从 Router 搬运的逻辑（原封不动）
+		if (!authHeader) {
+			return {
+				status: 'unauthenticated',
+				user: null,
+			};
+		}
+
+		// 初始化 UserServiceClient
+		const userClient = getUserServiceClient({
+			baseUrl: config.userService.url,
+			timeout: 10000,
+		});
+
+		// 使用 UserServiceClient 获取用户信息（Client 中间层已处理错误和解包）
+		const userInfo = await userClient.getUserInfo(authHeader);
+
+		// 构建 user 对象，只包含必需字段
+		const userData: Record<string, unknown> = {
+			id: userInfo.user_id,
+			userName: userInfo.user_name,
+			nickName: userInfo.nick_name,
+		};
+
+		// 添加可选字段（仅在存在时）
+		if (userInfo.email) {
+			userData.email = userInfo.email;
+		}
+		if (userInfo.avatar !== undefined) {
+			userData.avatar = userInfo.avatar || null;
+		}
+		if (userInfo.gender) {
+			userData.gender = userInfo.gender;
+		}
+
+		// 获取用户统计数据
+		// 如果统计数据查询失败，使用默认值（全部为 0）
+		let stats = null;
+		try {
+			stats = await UserStatsService.getUserStats(userInfo.user_id);
+		} catch (statsError) {
+			// 统计数据查询失败时，记录警告日志，但不影响用户基本信息的返回
+			logger.warn({
+				msg: '获取用户统计数据失败，使用默认值',
+				userId: userInfo.user_id,
+				error: statsError,
+			});
+			// 使用默认统计数据（全部为 0）
+			stats = {
+				totalModels: 0,
+				publicModels: 0,
+				privateModels: 0,
+				totalLikes: 0,
+				totalFavorites: 0,
+				totalViews: 0,
+				totalDownloads: 0,
+				likedModelsCount: 0,
+				favoritedModelsCount: 0,
+				totalRequests: 0,
+				completedRequests: 0,
+				failedRequests: 0,
+			};
+		}
+
+		// 将统计数据添加到用户对象中
+		userData.stats = stats;
+
+		return {
+			status: 'authenticated',
+			user: userData,
+		};
+	} catch (error) {
+		logger.error({ msg: '获取用户信息失败', error });
+		// 注意：即使出错，也返回对象（不抛出异常）
+		// 通过 status: 'error' 字段告知调用方发生了错误
+		return {
+			status: 'error',
+			user: null,
+		};
+	}
 }
