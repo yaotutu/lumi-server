@@ -145,6 +145,242 @@ export class DeviceServiceClient extends DeviceServiceBaseClient {
 		// 返回转换后的数据
 		return { products, total };
 	}
+
+	/**
+	 * 获取打印机列表
+	 *
+	 * 外部服务响应格式：
+	 * ```json
+	 * {
+	 *   "code": 200,
+	 *   "msg": "success",
+	 *   "data": [
+	 *     {
+	 *       "id": "01KG6CVPN91BCCXKHSN52HZJEB",
+	 *       "product_id": "R1",
+	 *       "product_name": "R1 系统 3D打印机",
+	 *       "device_name": "R1-BS2HWR",
+	 *       "state": 0,
+	 *       "status": 1,
+	 *       "last_online_time": 0,
+	 *       ...
+	 *     }
+	 *   ],
+	 *   "total": 1
+	 * }
+	 * ```
+	 *
+	 * @param params 查询参数（page, size）
+	 * @param token 认证 Token（用户的 Bearer Token）
+	 * @returns 打印机列表响应（原始格式，不做转换）
+	 *
+	 * @example
+	 * ```typescript
+	 * const client = new DeviceServiceClient({ baseUrl: 'http://device.topeai3d.com' });
+	 * const response = await client.getPrinterList({ page: 1, size: 10 }, 'Bearer xxx');
+	 * ```
+	 */
+	async getPrinterList(
+		params: { page: number; size: number },
+		token: string,
+	): Promise<{ code: number; data: any[]; msg: string; total: number }> {
+		// 构建查询字符串
+		const queryParams = new URLSearchParams({
+			page: String(params.page),
+			size: String(params.size),
+		});
+
+		// 构建完整端点（带查询参数）
+		const endpoint = `/api/v1.0/my/device/list?${queryParams.toString()}`;
+
+		// 调用中间层的 deviceRequestPaginated 方法
+		const { data, total } = await this.deviceRequestPaginated<any>(
+			endpoint,
+			{ method: 'GET' },
+			token,
+		);
+
+		// 返回原始格式（前端适配器会处理格式转换）
+		return {
+			code: 200,
+			data,
+			msg: 'success',
+			total,
+		};
+	}
+
+	/**
+	 * 获取打印机详情
+	 *
+	 * 外部服务响应格式：
+	 * ```json
+	 * {
+	 *   "code": 200,
+	 *   "msg": "success",
+	 *   "data": { ... },
+	 *   "status": { ... },
+	 *   "task": { ... }
+	 * }
+	 * ```
+	 *
+	 * @param deviceId 打印机 ID
+	 * @param token 认证 Token（用户的 Bearer Token）
+	 * @returns 打印机详情响应（原始格式，不做转换）
+	 *
+	 * @example
+	 * ```typescript
+	 * const client = new DeviceServiceClient({ baseUrl: 'http://device.topeai3d.com' });
+	 * const response = await client.getPrinterDetail('01KG6CVPN91BCCXKHSN52HZJEB', 'Bearer xxx');
+	 * ```
+	 */
+	async getPrinterDetail(
+		deviceId: string,
+		token: string,
+	): Promise<{ code: number; data: any; msg: string; status: any; task: any }> {
+		// 构建完整端点（带查询参数：device_id 和 id 都传递 deviceId）
+		const endpoint = `/api/v1.0/my/device/${deviceId}?device_id=${deviceId}&id=${deviceId}`;
+
+		// 调用父类的 request 方法（获取完整响应）
+		const response = await this.request<{
+			code: number;
+			msg: string;
+			data: any;
+			status: any;
+			task: any;
+		}>(endpoint, { method: 'GET' }, token);
+
+		// 验证 code 字段
+		if (response.code !== 200) {
+			// 特殊处理：认证错误（401）
+			if (response.code === 401) {
+				throw new Error('Device 服务认证失败');
+			}
+
+			// 其他业务错误
+			throw new Error(`Device 服务错误: ${response.msg}`);
+		}
+
+		// 返回完整响应（包括 status 和 task）
+		return response;
+	}
+
+	/**
+	 * 绑定打印机
+	 *
+	 * 外部服务响应格式：
+	 * ```json
+	 * {
+	 *   "code": 200,
+	 *   "msg": "success"
+	 * }
+	 * ```
+	 *
+	 * @param params 绑定参数（device_name, code）
+	 * @param token 认证 Token（用户的 Bearer Token）
+	 * @returns void
+	 *
+	 * @throws Error 当绑定失败时
+	 *
+	 * @example
+	 * ```typescript
+	 * const client = new DeviceServiceClient({ baseUrl: 'http://device.topeai3d.com' });
+	 * await client.bindPrinter({
+	 *   device_name: 'R1-AX6FFI',
+	 *   code: 'FTD8CZ'
+	 * }, 'Bearer xxx');
+	 * ```
+	 */
+	async bindPrinter(
+		params: { device_name: string; code: string },
+		token: string,
+	): Promise<void> {
+		// 构建完整端点
+		const endpoint = '/api/v1.0/my/device/bind';
+
+		// 调用父类的 request 方法（POST 请求）
+		const response = await this.request<{
+			code: number;
+			msg: string;
+		}>(
+			endpoint,
+			{
+				method: 'POST',
+				body: JSON.stringify(params),
+				headers: {
+					'Content-Type': 'application/json',
+				},
+			},
+			token,
+		);
+
+		// 验证 code 字段
+		if (response.code !== 200) {
+			// 特殊处理：认证错误（401）
+			if (response.code === 401) {
+				throw new Error('Device 服务认证失败');
+			}
+
+			// 其他业务错误
+			throw new Error(`绑定失败: ${response.msg}`);
+		}
+	}
+
+	/**
+	 * 解绑打印机
+	 *
+	 * 外部服务响应格式：
+	 * ```json
+	 * {
+	 *   "code": 200,
+	 *   "msg": "success"
+	 * }
+	 * ```
+	 *
+	 * @param params 解绑参数（device_id）
+	 * @param token 认证 Token（用户的 Bearer Token）
+	 * @returns void
+	 *
+	 * @throws Error 当解绑失败时
+	 *
+	 * @example
+	 * ```typescript
+	 * const client = new DeviceServiceClient({ baseUrl: 'http://device.topeai3d.com' });
+	 * await client.unbindPrinter({
+	 *   device_id: '01KG6CVPN91BCCXKHSN52HZJEB'
+	 * }, 'Bearer xxx');
+	 * ```
+	 */
+	async unbindPrinter(params: { device_id: string }, token: string): Promise<void> {
+		// 构建完整端点
+		const endpoint = '/api/v1.0/my/device/unbind';
+
+		// 调用父类的 request 方法（POST 请求）
+		const response = await this.request<{
+			code: number;
+			msg: string;
+		}>(
+			endpoint,
+			{
+				method: 'POST',
+				body: JSON.stringify(params),
+				headers: {
+					'Content-Type': 'application/json',
+				},
+			},
+			token,
+		);
+
+		// 验证 code 字段
+		if (response.code !== 200) {
+			// 特殊处理：认证错误（401）
+			if (response.code === 401) {
+				throw new Error('Device 服务认证失败');
+			}
+
+			// 其他业务错误
+			throw new Error(`解绑失败: ${response.msg}`);
+		}
+	}
 }
 
 // ============================================
