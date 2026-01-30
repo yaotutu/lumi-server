@@ -244,7 +244,7 @@ export async function getSliceTaskStatus(sliceTaskId: string) {
 	return {
 		sliceTaskId: statusResponse.id,
 		modelId: model.id, // ✅ 从数据库获取
-		sliceStatus: statusResponse.status as 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED', // ✅ 映射为 sliceStatus
+		sliceStatus: statusResponse.status as 'PENDING' | 'FETCHING' | 'PROCESSING' | 'COMPLETED' | 'FAILED', // ✅ 映射为 sliceStatus
 		gcodeUrl: statusResponse.gcode_download_url || null,
 		gcodeMetadata: statusResponse.gcode_metadata || null,
 		errorMessage: statusResponse.error_message || null,

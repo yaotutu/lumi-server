@@ -12,6 +12,7 @@ import { JSendFail, JSendSuccess } from '../common/jsend.schema.js';
 export const SliceTaskStatusEnum = Type.Union(
 	[
 		Type.Literal('PENDING'),
+		Type.Literal('FETCHING'), // 正在获取模型文件
 		Type.Literal('PROCESSING'),
 		Type.Literal('COMPLETED'),
 		Type.Literal('FAILED'),
