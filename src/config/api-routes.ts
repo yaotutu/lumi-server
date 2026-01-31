@@ -34,7 +34,8 @@ export const API_ROUTES = {
 		'/api/users', // 用户相关接口（包括所有子路径）
 		'/api/models', // 模型管理（包括所有子路径）
 		'/api/admin', // 管理接口（包括所有子路径）
-		'/api/printer', // 打印机管理（包括所有子路径：list, bind, unbind, detail）
+		'/api/printer', // 打印机管理（旧版本：list, bind, unbind, detail）
+		'/api/printers', // 打印机管理（新版本 RESTful API）
 		'/api/devices', // 设备管理（包括所有子路径：products）
 	],
 
