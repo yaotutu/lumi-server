@@ -378,6 +378,80 @@ export class DeviceServiceClient extends DeviceServiceBaseClient {
 			throw new Error(`解绑失败: ${response.msg}`);
 		}
 	}
+
+	/**
+	 * 创建打印任务
+	 *
+	 * 外部服务响应格式：
+	 * ```json
+	 * {
+	 *   "code": 200,
+	 *   "msg": "success"
+	 * }
+	 * ```
+	 *
+	 * 或错误响应：
+	 * ```json
+	 * {
+	 *   "code": 400,
+	 *   "msg": "invalid params"
+	 * }
+	 * ```
+	 *
+	 * @param params 打印任务参数
+	 * @param params.device_name 打印机设备名称
+	 * @param params.file_name 文件名称
+	 * @param params.gcode_url G-code 文件 URL
+	 * @param params.image 预览图 URL（可选）
+	 * @param params.user_id 用户 ID
+	 * @param token 认证 Token（用户的 Bearer Token）
+	 * @returns 打印任务创建结果
+	 *
+	 * @throws Error 当创建失败时
+	 *
+	 * @example
+	 * ```typescript
+	 * const client = new DeviceServiceClient({ baseUrl: 'http://device.topeai3d.com' });
+	 * const result = await client.createPrintTask({
+	 *   device_name: 'R1-BS2HWR',
+	 *   file_name: 'model.glb',
+	 *   gcode_url: 'https://s3.amazonaws.com/bucket/model.gcode',
+	 *   user_id: 'user-123'
+	 * }, 'Bearer xxx');
+	 * ```
+	 */
+	async createPrintTask(
+		params: {
+			device_name: string;
+			file_name: string;
+			gcode_url: string;
+			image?: string;
+			user_id: string;
+		},
+		token: string,
+	): Promise<{ code: number; msg: string }> {
+		// 构建完整端点
+		const endpoint = '/api/v1.0/task/start';
+
+		// 调用父类的 request 方法（POST 请求）
+		const response = await this.request<{
+			code: number;
+			msg: string;
+		}>(
+			endpoint,
+			{
+				method: 'POST',
+				body: JSON.stringify(params),
+				headers: {
+					'Content-Type': 'application/json',
+				},
+			},
+			token,
+		);
+
+		// 返回完整响应（Service 层会处理 code 验证）
+		return response;
+	}
 }
 
 // ============================================

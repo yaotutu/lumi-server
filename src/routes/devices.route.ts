@@ -433,4 +433,91 @@ export async function devicesRoutes(fastify: FastifyInstance) {
 			return reply.status(500).send(fail('解绑打印机失败，请稍后重试', 'INTERNAL_SERVER_ERROR'));
 		}
 	});
+
+	/**
+	 * POST /api/printer/task/start
+	 * 创建打印任务
+	 *
+	 * 请求体：
+	 * - deviceName: string (必填，打印机设备名称，前端传入)
+	 * - fileName: string (必填，文件名称)
+	 * - gcodeUrl: string (必填，G-code 文件 URL)
+	 *
+	 * 认证：需要用户登录
+	 *
+	 * 响应格式（200）：
+	 * {
+	 *   status: 'success',
+	 *   data: {
+	 *     message: '打印任务已创建'
+	 *   }
+	 * }
+	 */
+	fastify.post<{
+		Body: {
+			deviceName: string;
+			fileName: string;
+			gcodeUrl: string;
+		};
+	}>('/api/printer/task/start', async (request, reply) => {
+		try {
+			// 第 1 步：认证检查（提取用户 ID）
+			const userId = getUserIdFromRequest(request);
+
+			// 第 2 步：提取 Authorization Token
+			const token = getAuthTokenFromRequest(request);
+
+			// 第 3 步：提取请求体
+			const { deviceName, fileName, gcodeUrl } = request.body;
+
+			logger.info({
+				msg: '📥 收到创建打印任务请求（Route 层）',
+				userId,
+				deviceName,
+				fileName,
+			});
+
+			// 第 4 步：调用 Service 层
+			const result = await DeviceService.createPrintTask({
+				userId,
+				deviceName,
+				fileName,
+				gcodeUrl,
+				token,
+			});
+
+			// 第 5 步：返回成功响应（200 OK）
+			return reply.send(success(result));
+		} catch (error) {
+			// 错误处理
+			logger.error({
+				msg: '❌ 创建打印任务失败（Route 层）',
+				body: request.body,
+				error: error instanceof Error ? error.message : String(error),
+			});
+
+			// 认证错误
+			if (error instanceof Error && error.message.includes('认证')) {
+				return reply.status(401).send(fail('用户未认证或缺少认证信息', 'UNAUTHORIZED'));
+			}
+
+			// Device 服务认证错误
+			if (error instanceof Error && error.message.includes('Device 服务认证失败')) {
+				return reply.status(502).send(fail(error.message, 'EXTERNAL_AUTH_ERROR'));
+			}
+
+			// 参数无效（外部服务返回 400）
+			if (error instanceof Error && error.message.includes('参数无效')) {
+				return reply.status(400).send(fail(error.message, 'INVALID_PARAMS'));
+			}
+
+			// 外部服务错误
+			if (error instanceof Error && error.message.includes('Device 服务')) {
+				return reply.status(502).send(fail(error.message, 'EXTERNAL_SERVICE_ERROR'));
+			}
+
+			// 服务器错误
+			return reply.status(500).send(fail('创建打印任务失败，请稍后重试', 'INTERNAL_SERVER_ERROR'));
+		}
+	});
 }

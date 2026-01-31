@@ -338,3 +338,129 @@ export async function unbindPrinter(options: UnbindPrinterOptions): Promise<void
 		throw error;
 	}
 }
+
+/**
+ * 创建打印任务选项
+ */
+export interface CreatePrintTaskOptions {
+	/** 用户 ID（从认证信息中获取） */
+	userId: string;
+	/** 打印机设备名称（前端传入） */
+	deviceName: string;
+	/** 文件名称 */
+	fileName: string;
+	/** G-code 文件 URL */
+	gcodeUrl: string;
+	/** 认证 Token（必填，用于外部服务认证） */
+	token: string;
+}
+
+/**
+ * 创建打印任务结果
+ */
+export interface CreatePrintTaskResult {
+	/** 成功消息 */
+	message: string;
+}
+
+/**
+ * 创建打印任务
+ *
+ * @param options 创建选项（userId, deviceName, fileName, gcodeUrl, token 必填）
+ * @returns 打印任务创建结果
+ *
+ * @throws Error 当外部服务不可用或创建失败时
+ *
+ * @example
+ * ```typescript
+ * const result = await DeviceService.createPrintTask({
+ *   userId: 'user-123',
+ *   deviceName: 'R1-BS2HWR',
+ *   fileName: 'model.glb',
+ *   gcodeUrl: 'https://s3.amazonaws.com/bucket/model.gcode',
+ *   token: 'Bearer xxx'
+ * });
+ * ```
+ */
+export async function createPrintTask(
+	options: CreatePrintTaskOptions,
+): Promise<CreatePrintTaskResult> {
+	const { userId, deviceName, fileName, gcodeUrl, token } = options;
+
+	logger.info({
+		msg: '📥 收到创建打印任务请求',
+		userId,
+		deviceName,
+		fileName,
+	});
+
+	// 初始化 Device 服务客户端
+	const deviceClient = getDeviceServiceClient({
+		baseUrl: config.deviceService.url,
+		timeout: config.deviceService.timeout,
+	});
+
+	// 调用外部服务
+	try {
+		// 调用 Client 层创建打印任务
+		const response = await deviceClient.createPrintTask(
+			{
+				device_name: deviceName,
+				file_name: fileName,
+				gcode_url: gcodeUrl,
+				user_id: userId,
+			},
+			token,
+		);
+
+		// 验证响应 code
+		if (response.code === 200) {
+			logger.info({
+				msg: '✅ 创建打印任务成功',
+				userId,
+				deviceName,
+				fileName,
+			});
+
+			return {
+				message: '打印任务已创建',
+			};
+		}
+
+		// 处理业务错误（code !== 200）
+		if (response.code === 400) {
+			logger.warn({
+				msg: '⚠️ 创建打印任务失败：参数无效',
+				userId,
+				deviceName,
+				fileName,
+				responseMsg: response.msg,
+			});
+
+			throw new Error(`打印任务参数无效: ${response.msg}`);
+		}
+
+		// 其他未知错误
+		logger.error({
+			msg: '❌ 创建打印任务失败：未知错误',
+			userId,
+			deviceName,
+			fileName,
+			responseCode: response.code,
+			responseMsg: response.msg,
+		});
+
+		throw new Error(`打印任务创建失败: ${response.msg}`);
+	} catch (error) {
+		logger.error({
+			msg: '❌ 调用外部 Device 服务失败（创建打印任务）',
+			userId,
+			deviceName,
+			fileName,
+			error: error instanceof Error ? error.message : String(error),
+		});
+
+		// 重新抛出错误
+		throw error;
+	}
+}
