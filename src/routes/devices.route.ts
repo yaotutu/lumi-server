@@ -149,8 +149,8 @@ export async function devicesRoutes(fastify: FastifyInstance) {
 			});
 
 			// 第 4 步：返回成功响应（200 OK）
-			// 注意：这里直接返回外部服务的原始格式，前端适配器会处理
-			return reply.send(result);
+			// 使用 success() 包装，遵循 JSend 规范
+			return reply.send(success(result));
 		} catch (error) {
 			// 错误处理
 			logger.error({
@@ -232,8 +232,8 @@ export async function devicesRoutes(fastify: FastifyInstance) {
 			const result = await DeviceService.getPrinter(deviceId, token);
 
 			// 第 5 步：返回成功响应（200 OK）
-			// 注意：这里直接返回外部服务的原始格式，前端适配器会处理
-			return reply.send(result);
+			// 使用 success() 包装，遵循 JSend 规范
+			return reply.send(success(result));
 		} catch (error) {
 			// 错误处理
 			logger.error({
@@ -284,7 +284,7 @@ export async function devicesRoutes(fastify: FastifyInstance) {
 	 */
 	fastify.post<{
 		Body: {
-			device_name: string;
+			deviceName: string;
 			code: string;
 		};
 	}>('/api/printer/bind', async (request, reply) => {
@@ -296,17 +296,17 @@ export async function devicesRoutes(fastify: FastifyInstance) {
 			const token = getAuthTokenFromRequest(request);
 
 			// 第 3 步：提取请求体
-			const { device_name, code } = request.body;
+			const { deviceName, code } = request.body;
 
 			logger.info({
 				msg: '📥 收到绑定打印机请求（Route 层）',
 				userId,
-				device_name,
+				deviceName,
 			});
 
 			// 第 4 步：调用 Service 层
 			await DeviceService.bindPrinter({
-				deviceName: device_name,  // 转换为 camelCase
+				deviceName,
 				code,
 				token,
 			});
@@ -391,7 +391,7 @@ export async function devicesRoutes(fastify: FastifyInstance) {
 			// 第 4 步：调用 Service 层解绑
 			// 直接传递 deviceId（打印机 ID），不需要先获取打印机信息
 			await DeviceService.unbindPrinter({
-				deviceId,  // 打印机 ID
+				deviceId, // 打印机 ID
 				token,
 			});
 
@@ -969,7 +969,7 @@ export async function devicesRoutes(fastify: FastifyInstance) {
 
 			// 第 4 步：调用 Service 层（新版本）
 			await DeviceService.unbindPrinter({
-				deviceName: id,
+				deviceId: id,
 				token,
 			});
 

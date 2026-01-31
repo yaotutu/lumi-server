@@ -9,8 +9,8 @@
  */
 
 import { getUserServiceClient } from '@/clients/user';
-import { UnauthenticatedError } from '@/utils/errors.js';
 import config from '@/config/index';
+import { UnauthenticatedError } from '@/utils/errors.js';
 import { logger } from '@/utils/logger';
 
 /**
