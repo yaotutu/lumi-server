@@ -214,7 +214,7 @@ export async function userRoutes(fastify: FastifyInstance) {
 					return reply.status(404).send(fail(error.message, error.code));
 				}
 				if (error instanceof ExternalAPIError) {
-					return reply.status(500).send(fail(error.message, error.code));
+					return reply.status(502).send(fail(error.message, error.code));
 				}
 
 				return reply.status(500).send(errorResponse('服务器内部错误', 'INTERNAL_ERROR'));
@@ -264,7 +264,7 @@ export async function userRoutes(fastify: FastifyInstance) {
 				return reply.status(400).send(fail(error.message, error.code));
 			}
 			if (error instanceof ExternalAPIError) {
-				return reply.status(500).send(fail(error.message, error.code));
+				return reply.status(502).send(fail(error.message, error.code));
 			}
 
 			return reply.status(500).send(errorResponse('服务器内部错误', 'INTERNAL_ERROR'));
@@ -315,7 +315,7 @@ export async function userRoutes(fastify: FastifyInstance) {
 				return reply.status(400).send(fail(error.message, error.code));
 			}
 			if (error instanceof ExternalAPIError) {
-				return reply.status(500).send(fail(error.message, error.code));
+				return reply.status(502).send(fail(error.message, error.code));
 			}
 
 			return reply.status(500).send(errorResponse('服务器内部错误', 'INTERNAL_ERROR'));

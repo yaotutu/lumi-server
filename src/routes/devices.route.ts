@@ -17,8 +17,23 @@
  */
 
 import type { FastifyInstance } from 'fastify';
-import { getProductsSchema } from '@/schemas/routes/devices.schema.js';
+import {
+	batchGetPrintersSchema,
+	bindPrinterSchema,
+	createPrintJobSchema,
+	getPrinterSchema,
+	getPrinterStatusSchema,
+	getPrintersSchema,
+	getProductsSchema,
+	unbindPrinterSchema,
+} from '@/schemas/routes/devices.schema.js';
 import * as DeviceService from '@/services/device.service.js';
+import {
+	ExternalAPIError,
+	NotFoundError,
+	UnauthenticatedError,
+	ValidationError,
+} from '@/utils/errors.js';
 import { logger } from '@/utils/logger.js';
 import { getAuthTokenFromRequest, getUserIdFromRequest } from '@/utils/request-auth.js';
 import { fail, success } from '@/utils/response.js';
@@ -85,19 +100,17 @@ export async function devicesRoutes(fastify: FastifyInstance) {
 				error: error instanceof Error ? error.message : String(error),
 			});
 
-			// 认证错误（由 getUserIdFromRequest 或 getAuthTokenFromRequest 抛出）
-			if (error instanceof Error && error.message.includes('认证')) {
-				return reply.status(401).send(fail('用户未认证或缺少认证信息', 'UNAUTHORIZED'));
+			// ✅ 使用 instanceof 检查错误类型
+			if (error instanceof UnauthenticatedError) {
+				return reply.status(401).send(fail('用户未认证或缺少认证信息', 'UNAUTHENTICATED'));
 			}
 
-			// Device 服务认证错误
-			if (error instanceof Error && error.message.includes('Device 服务认证失败')) {
-				return reply.status(502).send(fail(error.message, 'EXTERNAL_AUTH_ERROR'));
-			}
-
-			// 外部服务错误（由 Service 层抛出）
-			if (error instanceof Error && error.message.includes('Device 服务')) {
+			if (error instanceof ExternalAPIError) {
 				return reply.status(502).send(fail(error.message, 'EXTERNAL_SERVICE_ERROR'));
+			}
+
+			if (error instanceof ValidationError) {
+				return reply.status(400).send(fail(error.message, 'VALIDATION_ERROR'));
 			}
 
 			// 服务器错误（未预期的错误）
@@ -105,429 +118,13 @@ export async function devicesRoutes(fastify: FastifyInstance) {
 		}
 	});
 
-	/**
-	 * GET /api/printer/list
-	 * 获取打印机列表
-	 *
-	 * 查询参数：
-	 * - page: number (必填)
-	 * - size: number (必填)
-	 *
-	 * 认证：需要用户登录
-	 *
-	 * 响应格式（200）：
-	 * {
-	 *   code: 200,
-	 *   data: [...],
-	 *   msg: "success",
-	 *   total: 1
-	 * }
-	 */
-	fastify.get<{
-		Querystring: {
-			page: number;
-			size: number;
-		};
-	}>('/api/printer/list', async (request, reply) => {
-		try {
-			// 第 1 步：认证检查（提取用户 ID）
-			const userId = getUserIdFromRequest(request);
-
-			// 第 2 步：提取 Authorization Token
-			const token = getAuthTokenFromRequest(request);
-
-			logger.info({
-				msg: '📥 收到获取打印机列表请求（Route 层）',
-				userId,
-				query: request.query,
-			});
-
-			// 第 3 步：调用 Service 层
-			const result = await DeviceService.getPrinterList(userId, token, {
-				page: request.query.page,
-				size: request.query.size,
-			});
-
-			// 第 4 步：返回成功响应（200 OK）
-			// 使用 success() 包装，遵循 JSend 规范
-			return reply.send(success(result));
-		} catch (error) {
-			// 错误处理
-			logger.error({
-				msg: '❌ 获取打印机列表失败（Route 层）',
-				query: request.query,
-				error: error instanceof Error ? error.message : String(error),
-			});
-
-			// 认证错误
-			if (error instanceof Error && error.message.includes('认证')) {
-				return reply.status(401).send(fail('用户未认证或缺少认证信息', 'UNAUTHORIZED'));
-			}
-
-			// Device 服务认证错误
-			if (error instanceof Error && error.message.includes('Device 服务认证失败')) {
-				return reply.status(502).send(fail(error.message, 'EXTERNAL_AUTH_ERROR'));
-			}
-
-			// 外部服务错误
-			if (error instanceof Error && error.message.includes('Device 服务')) {
-				return reply.status(502).send(fail(error.message, 'EXTERNAL_SERVICE_ERROR'));
-			}
-
-			// 服务器错误
-			return reply
-				.status(500)
-				.send(fail('获取打印机列表失败，请稍后重试', 'INTERNAL_SERVER_ERROR'));
-		}
-	});
-
-	/**
-	 * GET /api/printer/:deviceId
-	 * 获取打印机详情
-	 *
-	 * 路径参数：
-	 * - deviceId: string (必填)
-	 *
-	 * 查询参数：
-	 * - device_id: string (必填，与路径参数相同)
-	 * - id: string (必填，与路径参数相同)
-	 *
-	 * 认证：需要用户登录
-	 *
-	 * 响应格式（200）：
-	 * {
-	 *   code: 200,
-	 *   data: {...},
-	 *   msg: "success",
-	 *   status: {...},
-	 *   task: {...}
-	 * }
-	 */
-	fastify.get<{
-		Params: {
-			deviceId: string;
-		};
-		Querystring: {
-			device_id: string;
-			id: string;
-		};
-	}>('/api/printer/:deviceId', async (request, reply) => {
-		try {
-			// 第 1 步：认证检查（提取用户 ID）
-			const userId = getUserIdFromRequest(request);
-
-			// 第 2 步：提取 Authorization Token
-			const token = getAuthTokenFromRequest(request);
-
-			// 第 3 步：提取设备 ID
-			const deviceId = request.params.deviceId;
-
-			logger.info({
-				msg: '📥 收到获取打印机详情请求（Route 层）',
-				userId,
-				deviceId,
-			});
-
-			// 第 4 步：调用 Service 层
-			const result = await DeviceService.getPrinter(deviceId, token);
-
-			// 第 5 步：返回成功响应（200 OK）
-			// 使用 success() 包装，遵循 JSend 规范
-			return reply.send(success(result));
-		} catch (error) {
-			// 错误处理
-			logger.error({
-				msg: '❌ 获取打印机详情失败（Route 层）',
-				deviceId: request.params.deviceId,
-				error: error instanceof Error ? error.message : String(error),
-			});
-
-			// 认证错误
-			if (error instanceof Error && error.message.includes('认证')) {
-				return reply.status(401).send(fail('用户未认证或缺少认证信息', 'UNAUTHORIZED'));
-			}
-
-			// Device 服务认证错误
-			if (error instanceof Error && error.message.includes('Device 服务认证失败')) {
-				return reply.status(502).send(fail(error.message, 'EXTERNAL_AUTH_ERROR'));
-			}
-
-			// 外部服务错误
-			if (error instanceof Error && error.message.includes('Device 服务')) {
-				return reply.status(502).send(fail(error.message, 'EXTERNAL_SERVICE_ERROR'));
-			}
-
-			// 服务器错误
-			return reply
-				.status(500)
-				.send(fail('获取打印机详情失败，请稍后重试', 'INTERNAL_SERVER_ERROR'));
-		}
-	});
-
-	/**
-	 * POST /api/printer/bind
-	 * 绑定打印机
-	 *
-	 * 请求体：
-	 * - device_name: string (必填，设备名称)
-	 * - code: string (必填，绑定码)
-	 *
-	 * 认证：需要用户登录
-	 *
-	 * 响应格式（200）：
-	 * {
-	 *   status: 'success',
-	 *   data: {
-	 *     message: '绑定成功'
-	 *   }
-	 * }
-	 */
-	fastify.post<{
-		Body: {
-			deviceName: string;
-			code: string;
-		};
-	}>('/api/printer/bind', async (request, reply) => {
-		try {
-			// 第 1 步：认证检查（提取用户 ID）
-			const userId = getUserIdFromRequest(request);
-
-			// 第 2 步：提取 Authorization Token
-			const token = getAuthTokenFromRequest(request);
-
-			// 第 3 步：提取请求体
-			const { deviceName, code } = request.body;
-
-			logger.info({
-				msg: '📥 收到绑定打印机请求（Route 层）',
-				userId,
-				deviceName,
-			});
-
-			// 第 4 步：调用 Service 层
-			await DeviceService.bindPrinter({
-				deviceName,
-				code,
-				token,
-			});
-
-			// 第 5 步：返回成功响应（200 OK）
-			return reply.send(
-				success({
-					message: '绑定成功',
-				}),
-			);
-		} catch (error) {
-			// 错误处理
-			logger.error({
-				msg: '❌ 绑定打印机失败（Route 层）',
-				body: request.body,
-				error: error instanceof Error ? error.message : String(error),
-			});
-
-			// 认证错误
-			if (error instanceof Error && error.message.includes('认证')) {
-				return reply.status(401).send(fail('用户未认证或缺少认证信息', 'UNAUTHORIZED'));
-			}
-
-			// Device 服务认证错误
-			if (error instanceof Error && error.message.includes('Device 服务认证失败')) {
-				return reply.status(502).send(fail(error.message, 'EXTERNAL_AUTH_ERROR'));
-			}
-
-			// 绑定失败（外部服务返回错误）
-			if (error instanceof Error && error.message.includes('绑定失败')) {
-				return reply.status(400).send(fail(error.message, 'BIND_FAILED'));
-			}
-
-			// 外部服务错误
-			if (error instanceof Error && error.message.includes('Device 服务')) {
-				return reply.status(502).send(fail(error.message, 'EXTERNAL_SERVICE_ERROR'));
-			}
-
-			// 服务器错误
-			return reply.status(500).send(fail('绑定打印机失败，请稍后重试', 'INTERNAL_SERVER_ERROR'));
-		}
-	});
-
-	/**
-	 * POST /api/printer/unbind
-	 * 解绑打印机
-	 *
-	 * 请求体：
-	 * - device_id: string (必填，设备 ID)
-	 *
-	 * 认证：需要用户登录
-	 *
-	 * 响应格式（200）：
-	 * {
-	 *   status: 'success',
-	 *   data: {
-	 *     message: '解绑成功'
-	 *   }
-	 * }
-	 */
-	fastify.post<{
-		Body: {
-			deviceId: string;
-		};
-	}>('/api/printer/unbind', async (request, reply) => {
-		try {
-			// 第 1 步：认证检查（提取用户 ID）
-			const userId = getUserIdFromRequest(request);
-
-			// 第 2 步：提取 Authorization Token
-			const token = getAuthTokenFromRequest(request);
-
-			// 第 3 步：提取请求体（前端使用 camelCase）
-			const { deviceId } = request.body;
-
-			logger.info({
-				msg: '📥 收到解绑打印机请求（Route 层）',
-				userId,
-				deviceId,
-			});
-
-			// 第 4 步：调用 Service 层解绑
-			// 直接传递 deviceId（打印机 ID），不需要先获取打印机信息
-			await DeviceService.unbindPrinter({
-				deviceId, // 打印机 ID
-				token,
-			});
-
-			// 第 5 步：返回成功响应（200 OK）
-			return reply.send(
-				success({
-					message: '解绑成功',
-				}),
-			);
-		} catch (error) {
-			// 错误处理
-			logger.error({
-				msg: '❌ 解绑打印机失败（Route 层）',
-				body: request.body,
-				error: error instanceof Error ? error.message : String(error),
-			});
-
-			// 认证错误
-			if (error instanceof Error && error.message.includes('认证')) {
-				return reply.status(401).send(fail('用户未认证或缺少认证信息', 'UNAUTHORIZED'));
-			}
-
-			// Device 服务认证错误
-			if (error instanceof Error && error.message.includes('Device 服务认证失败')) {
-				return reply.status(502).send(fail(error.message, 'EXTERNAL_AUTH_ERROR'));
-			}
-
-			// 解绑失败（外部服务返回错误）
-			if (error instanceof Error && error.message.includes('解绑失败')) {
-				return reply.status(400).send(fail(error.message, 'UNBIND_FAILED'));
-			}
-
-			// 外部服务错误
-			if (error instanceof Error && error.message.includes('Device 服务')) {
-				return reply.status(502).send(fail(error.message, 'EXTERNAL_SERVICE_ERROR'));
-			}
-
-			// 服务器错误
-			return reply.status(500).send(fail('解绑打印机失败，请稍后重试', 'INTERNAL_SERVER_ERROR'));
-		}
-	});
-
-	/**
-	 * POST /api/printer/task/start
-	 * 创建打印任务
-	 *
-	 * 请求体：
-	 * - deviceName: string (必填，打印机设备名称，前端传入)
-	 * - fileName: string (必填，文件名称)
-	 * - gcodeUrl: string (必填，G-code 文件 URL)
-	 *
-	 * 认证：需要用户登录
-	 *
-	 * 响应格式（200）：
-	 * {
-	 *   status: 'success',
-	 *   data: {
-	 *     message: '打印任务已创建'
-	 *   }
-	 * }
-	 */
-	fastify.post<{
-		Body: {
-			deviceName: string;
-			fileName: string;
-			gcodeUrl: string;
-		};
-	}>('/api/printer/task/start', async (request, reply) => {
-		try {
-			// 第 1 步：认证检查（提取用户 ID）
-			const userId = getUserIdFromRequest(request);
-
-			// 第 2 步：提取 Authorization Token
-			const token = getAuthTokenFromRequest(request);
-
-			// 第 3 步：提取请求体
-			const { deviceName, fileName, gcodeUrl } = request.body;
-
-			logger.info({
-				msg: '📥 收到创建打印任务请求（Route 层）',
-				userId,
-				deviceName,
-				fileName,
-			});
-
-			// 第 4 步：调用 Service 层
-			const result = await DeviceService.createPrintTask({
-				userId,
-				deviceName,
-				fileName,
-				gcodeUrl,
-				token,
-			});
-
-			// 第 5 步：返回成功响应（200 OK）
-			return reply.send(success(result));
-		} catch (error) {
-			// 错误处理
-			logger.error({
-				msg: '❌ 创建打印任务失败（Route 层）',
-				body: request.body,
-				error: error instanceof Error ? error.message : String(error),
-			});
-
-			// 认证错误
-			if (error instanceof Error && error.message.includes('认证')) {
-				return reply.status(401).send(fail('用户未认证或缺少认证信息', 'UNAUTHORIZED'));
-			}
-
-			// Device 服务认证错误
-			if (error instanceof Error && error.message.includes('Device 服务认证失败')) {
-				return reply.status(502).send(fail(error.message, 'EXTERNAL_AUTH_ERROR'));
-			}
-
-			// 参数无效（外部服务返回 400）
-			if (error instanceof Error && error.message.includes('参数无效')) {
-				return reply.status(400).send(fail(error.message, 'INVALID_PARAMS'));
-			}
-
-			// 外部服务错误
-			if (error instanceof Error && error.message.includes('Device 服务')) {
-				return reply.status(502).send(fail(error.message, 'EXTERNAL_SERVICE_ERROR'));
-			}
-
-			// 服务器错误
-			return reply.status(500).send(fail('创建打印任务失败，请稍后重试', 'INTERNAL_SERVER_ERROR'));
-		}
-	});
-
 	// ============================================
-	// 新版本 RESTful API（优化后的接口）
+	// 打印机管理 API（RESTful 风格）
 	// ============================================
 
 	/**
 	 * GET /api/printers
-	 * 获取打印机列表（新版本 - 默认包含实时状态）
+	 * 获取打印机列表（默认包含实时状态）
 	 *
 	 * 查询参数：
 	 * - page: number (可选，默认 1)
@@ -553,7 +150,7 @@ export async function devicesRoutes(fastify: FastifyInstance) {
 			size?: number;
 			includeStatus?: boolean;
 		};
-	}>('/api/printers', async (request, reply) => {
+	}>('/api/printers', { schema: getPrintersSchema }, async (request, reply) => {
 		try {
 			// 第 1 步：认证检查（提取用户 ID）
 			const userId = getUserIdFromRequest(request);
@@ -584,19 +181,17 @@ export async function devicesRoutes(fastify: FastifyInstance) {
 				error: error instanceof Error ? error.message : String(error),
 			});
 
-			// 认证错误
-			if (error instanceof Error && error.message.includes('认证')) {
-				return reply.status(401).send(fail('用户未认证或缺少认证信息', 'UNAUTHORIZED'));
+			// ✅ 使用 instanceof 检查错误类型
+			if (error instanceof UnauthenticatedError) {
+				return reply.status(401).send(fail('用户未认证或缺少认证信息', 'UNAUTHENTICATED'));
 			}
 
-			// Device 服务认证错误
-			if (error instanceof Error && error.message.includes('Device 服务认证失败')) {
-				return reply.status(502).send(fail(error.message, 'EXTERNAL_AUTH_ERROR'));
-			}
-
-			// 外部服务错误
-			if (error instanceof Error && error.message.includes('Device 服务')) {
+			if (error instanceof ExternalAPIError) {
 				return reply.status(502).send(fail(error.message, 'EXTERNAL_SERVICE_ERROR'));
+			}
+
+			if (error instanceof ValidationError) {
+				return reply.status(400).send(fail(error.message, 'VALIDATION_ERROR'));
 			}
 
 			// 服务器错误
@@ -608,7 +203,7 @@ export async function devicesRoutes(fastify: FastifyInstance) {
 
 	/**
 	 * GET /api/printers/:id
-	 * 获取单台打印机详情（新版本）
+	 * 获取单台打印机详情
 	 *
 	 * 路径参数：
 	 * - id: string (必填，打印机 ID / device_name)
@@ -627,7 +222,7 @@ export async function devicesRoutes(fastify: FastifyInstance) {
 		Params: {
 			id: string;
 		};
-	}>('/api/printers/:id', async (request, reply) => {
+	}>('/api/printers/:id', { schema: getPrinterSchema }, async (request, reply) => {
 		try {
 			// 第 1 步：认证检查（提取用户 ID）
 			const userId = getUserIdFromRequest(request);
@@ -657,24 +252,21 @@ export async function devicesRoutes(fastify: FastifyInstance) {
 				error: error instanceof Error ? error.message : String(error),
 			});
 
-			// 认证错误
-			if (error instanceof Error && error.message.includes('认证')) {
-				return reply.status(401).send(fail('用户未认证或缺少认证信息', 'UNAUTHORIZED'));
+			// ✅ 使用 instanceof 检查错误类型
+			if (error instanceof UnauthenticatedError) {
+				return reply.status(401).send(fail('用户未认证或缺少认证信息', 'UNAUTHENTICATED'));
 			}
 
-			// Device 服务认证错误
-			if (error instanceof Error && error.message.includes('Device 服务认证失败')) {
-				return reply.status(502).send(fail(error.message, 'EXTERNAL_AUTH_ERROR'));
-			}
-
-			// 打印机不存在
-			if (error instanceof Error && error.message.includes('不存在')) {
+			if (error instanceof NotFoundError) {
 				return reply.status(404).send(fail('打印机不存在', 'PRINTER_NOT_FOUND'));
 			}
 
-			// 外部服务错误
-			if (error instanceof Error && error.message.includes('Device 服务')) {
+			if (error instanceof ExternalAPIError) {
 				return reply.status(502).send(fail(error.message, 'EXTERNAL_SERVICE_ERROR'));
+			}
+
+			if (error instanceof ValidationError) {
+				return reply.status(400).send(fail(error.message, 'VALIDATION_ERROR'));
 			}
 
 			// 服务器错误
@@ -686,7 +278,7 @@ export async function devicesRoutes(fastify: FastifyInstance) {
 
 	/**
 	 * POST /api/printers/batch
-	 * 批量获取打印机详情（新版本）
+	 * 批量获取打印机详情
 	 *
 	 * 请求体：
 	 * - ids: string[] (必填，打印机 ID 列表，最多 20 个)
@@ -705,7 +297,7 @@ export async function devicesRoutes(fastify: FastifyInstance) {
 		Body: {
 			ids: string[];
 		};
-	}>('/api/printers/batch', async (request, reply) => {
+	}>('/api/printers/batch', { schema: batchGetPrintersSchema }, async (request, reply) => {
 		try {
 			// 第 1 步：认证检查（提取用户 ID）
 			const userId = getUserIdFromRequest(request);
@@ -735,27 +327,16 @@ export async function devicesRoutes(fastify: FastifyInstance) {
 				error: error instanceof Error ? error.message : String(error),
 			});
 
-			// 认证错误
-			if (error instanceof Error && error.message.includes('认证')) {
-				return reply.status(401).send(fail('用户未认证或缺少认证信息', 'UNAUTHORIZED'));
+			// ✅ 使用 instanceof 检查错误类型
+			if (error instanceof UnauthenticatedError) {
+				return reply.status(401).send(fail('用户未认证或缺少认证信息', 'UNAUTHENTICATED'));
 			}
 
-			// 参数错误
-			if (error instanceof Error && error.message.includes('不能为空')) {
-				return reply.status(400).send(fail(error.message, 'INVALID_PARAMS'));
+			if (error instanceof ValidationError) {
+				return reply.status(400).send(fail(error.message, 'VALIDATION_ERROR'));
 			}
 
-			if (error instanceof Error && error.message.includes('最多支持')) {
-				return reply.status(400).send(fail(error.message, 'TOO_MANY_IDS'));
-			}
-
-			// Device 服务认证错误
-			if (error instanceof Error && error.message.includes('Device 服务认证失败')) {
-				return reply.status(502).send(fail(error.message, 'EXTERNAL_AUTH_ERROR'));
-			}
-
-			// 外部服务错误
-			if (error instanceof Error && error.message.includes('Device 服务')) {
+			if (error instanceof ExternalAPIError) {
 				return reply.status(502).send(fail(error.message, 'EXTERNAL_SERVICE_ERROR'));
 			}
 
@@ -768,7 +349,7 @@ export async function devicesRoutes(fastify: FastifyInstance) {
 
 	/**
 	 * GET /api/printers/:id/status
-	 * 获取打印机实时状态（新版本 - 轮询优化）
+	 * 获取打印机实时状态（轮询优化）
 	 *
 	 * 路径参数：
 	 * - id: string (必填，打印机 ID / device_name)
@@ -790,7 +371,7 @@ export async function devicesRoutes(fastify: FastifyInstance) {
 		Params: {
 			id: string;
 		};
-	}>('/api/printers/:id/status', async (request, reply) => {
+	}>('/api/printers/:id/status', { schema: getPrinterStatusSchema }, async (request, reply) => {
 		try {
 			// 第 1 步：认证检查（提取用户 ID）
 			const userId = getUserIdFromRequest(request);
@@ -820,24 +401,21 @@ export async function devicesRoutes(fastify: FastifyInstance) {
 				error: error instanceof Error ? error.message : String(error),
 			});
 
-			// 认证错误
-			if (error instanceof Error && error.message.includes('认证')) {
-				return reply.status(401).send(fail('用户未认证或缺少认证信息', 'UNAUTHORIZED'));
+			// ✅ 使用 instanceof 检查错误类型
+			if (error instanceof UnauthenticatedError) {
+				return reply.status(401).send(fail('用户未认证或缺少认证信息', 'UNAUTHENTICATED'));
 			}
 
-			// Device 服务认证错误
-			if (error instanceof Error && error.message.includes('Device 服务认证失败')) {
-				return reply.status(502).send(fail(error.message, 'EXTERNAL_AUTH_ERROR'));
-			}
-
-			// 打印机不存在
-			if (error instanceof Error && error.message.includes('不存在')) {
+			if (error instanceof NotFoundError) {
 				return reply.status(404).send(fail('打印机不存在', 'PRINTER_NOT_FOUND'));
 			}
 
-			// 外部服务错误
-			if (error instanceof Error && error.message.includes('Device 服务')) {
+			if (error instanceof ExternalAPIError) {
 				return reply.status(502).send(fail(error.message, 'EXTERNAL_SERVICE_ERROR'));
+			}
+
+			if (error instanceof ValidationError) {
+				return reply.status(400).send(fail(error.message, 'VALIDATION_ERROR'));
 			}
 
 			// 服务器错误
@@ -849,7 +427,7 @@ export async function devicesRoutes(fastify: FastifyInstance) {
 
 	/**
 	 * POST /api/printers
-	 * 绑定打印机（新版本 - RESTful 风格）
+	 * 绑定打印机
 	 *
 	 * 请求体：
 	 * - deviceName: string (必填，设备名称)
@@ -870,7 +448,7 @@ export async function devicesRoutes(fastify: FastifyInstance) {
 			deviceName: string;
 			code: string;
 		};
-	}>('/api/printers', async (request, reply) => {
+	}>('/api/printers', { schema: bindPrinterSchema }, async (request, reply) => {
 		try {
 			// 第 1 步：认证检查（提取用户 ID）
 			const userId = getUserIdFromRequest(request);
@@ -904,23 +482,16 @@ export async function devicesRoutes(fastify: FastifyInstance) {
 				error: error instanceof Error ? error.message : String(error),
 			});
 
-			// 认证错误
-			if (error instanceof Error && error.message.includes('认证')) {
-				return reply.status(401).send(fail('用户未认证或缺少认证信息', 'UNAUTHORIZED'));
+			// ✅ 使用 instanceof 检查错误类型
+			if (error instanceof UnauthenticatedError) {
+				return reply.status(401).send(fail('用户未认证或缺少认证信息', 'UNAUTHENTICATED'));
 			}
 
-			// Device 服务认证错误
-			if (error instanceof Error && error.message.includes('Device 服务认证失败')) {
-				return reply.status(502).send(fail(error.message, 'EXTERNAL_AUTH_ERROR'));
+			if (error instanceof ValidationError) {
+				return reply.status(400).send(fail(error.message, 'VALIDATION_ERROR'));
 			}
 
-			// 绑定失败（外部服务返回错误）
-			if (error instanceof Error && error.message.includes('绑定失败')) {
-				return reply.status(400).send(fail(error.message, 'BIND_FAILED'));
-			}
-
-			// 外部服务错误
-			if (error instanceof Error && error.message.includes('Device 服务')) {
+			if (error instanceof ExternalAPIError) {
 				return reply.status(502).send(fail(error.message, 'EXTERNAL_SERVICE_ERROR'));
 			}
 
@@ -931,7 +502,7 @@ export async function devicesRoutes(fastify: FastifyInstance) {
 
 	/**
 	 * DELETE /api/printers/:id
-	 * 解绑打印机（新版本 - RESTful 风格）
+	 * 解绑打印机
 	 *
 	 * 路径参数：
 	 * - id: string (必填，打印机 ID / device_name)
@@ -950,7 +521,7 @@ export async function devicesRoutes(fastify: FastifyInstance) {
 		Params: {
 			id: string;
 		};
-	}>('/api/printers/:id', async (request, reply) => {
+	}>('/api/printers/:id', { schema: unbindPrinterSchema }, async (request, reply) => {
 		try {
 			// 第 1 步：认证检查（提取用户 ID）
 			const userId = getUserIdFromRequest(request);
@@ -987,23 +558,16 @@ export async function devicesRoutes(fastify: FastifyInstance) {
 				error: error instanceof Error ? error.message : String(error),
 			});
 
-			// 认证错误
-			if (error instanceof Error && error.message.includes('认证')) {
-				return reply.status(401).send(fail('用户未认证或缺少认证信息', 'UNAUTHORIZED'));
+			// ✅ 使用 instanceof 检查错误类型
+			if (error instanceof UnauthenticatedError) {
+				return reply.status(401).send(fail('用户未认证或缺少认证信息', 'UNAUTHENTICATED'));
 			}
 
-			// Device 服务认证错误
-			if (error instanceof Error && error.message.includes('Device 服务认证失败')) {
-				return reply.status(502).send(fail(error.message, 'EXTERNAL_AUTH_ERROR'));
+			if (error instanceof ValidationError) {
+				return reply.status(400).send(fail(error.message, 'VALIDATION_ERROR'));
 			}
 
-			// 解绑失败（外部服务返回错误）
-			if (error instanceof Error && error.message.includes('解绑失败')) {
-				return reply.status(400).send(fail(error.message, 'UNBIND_FAILED'));
-			}
-
-			// 外部服务错误
-			if (error instanceof Error && error.message.includes('Device 服务')) {
+			if (error instanceof ExternalAPIError) {
 				return reply.status(502).send(fail(error.message, 'EXTERNAL_SERVICE_ERROR'));
 			}
 
@@ -1014,7 +578,7 @@ export async function devicesRoutes(fastify: FastifyInstance) {
 
 	/**
 	 * POST /api/printers/:id/jobs
-	 * 创建打印任务（新版本 - RESTful 风格）
+	 * 创建打印任务
 	 *
 	 * 路径参数：
 	 * - id: string (必填，打印机 ID / device_name)
@@ -1046,7 +610,7 @@ export async function devicesRoutes(fastify: FastifyInstance) {
 			fileName: string;
 			gcodeUrl: string;
 		};
-	}>('/api/printers/:id/jobs', async (request, reply) => {
+	}>('/api/printers/:id/jobs', { schema: createPrintJobSchema }, async (request, reply) => {
 		try {
 			// 第 1 步：认证检查（提取用户 ID）
 			const userId = getUserIdFromRequest(request);
@@ -1066,7 +630,7 @@ export async function devicesRoutes(fastify: FastifyInstance) {
 			});
 
 			// 第 4 步：调用 Service 层
-			const result = await DeviceService.createPrintTask({
+			await DeviceService.createPrintTask({
 				userId,
 				deviceName: id,
 				fileName,
@@ -1095,23 +659,16 @@ export async function devicesRoutes(fastify: FastifyInstance) {
 				error: error instanceof Error ? error.message : String(error),
 			});
 
-			// 认证错误
-			if (error instanceof Error && error.message.includes('认证')) {
-				return reply.status(401).send(fail('用户未认证或缺少认证信息', 'UNAUTHORIZED'));
+			// ✅ 使用 instanceof 检查错误类型
+			if (error instanceof UnauthenticatedError) {
+				return reply.status(401).send(fail('用户未认证或缺少认证信息', 'UNAUTHENTICATED'));
 			}
 
-			// Device 服务认证错误
-			if (error instanceof Error && error.message.includes('Device 服务认证失败')) {
-				return reply.status(502).send(fail(error.message, 'EXTERNAL_AUTH_ERROR'));
+			if (error instanceof ValidationError) {
+				return reply.status(400).send(fail(error.message, 'VALIDATION_ERROR'));
 			}
 
-			// 参数无效（外部服务返回 400）
-			if (error instanceof Error && error.message.includes('参数无效')) {
-				return reply.status(400).send(fail(error.message, 'INVALID_PARAMS'));
-			}
-
-			// 外部服务错误
-			if (error instanceof Error && error.message.includes('Device 服务')) {
+			if (error instanceof ExternalAPIError) {
 				return reply.status(502).send(fail(error.message, 'EXTERNAL_SERVICE_ERROR'));
 			}
 

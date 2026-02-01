@@ -6,7 +6,12 @@
 import type { FastifyInstance } from 'fastify';
 import { createSliceSchema, getSliceStatusSchema } from '@/schemas/routes/slices.schema.js';
 import * as SliceService from '@/services/slice.service.js';
-import { ValidationError } from '@/utils/errors.js';
+import {
+	ExternalAPIError,
+	NotFoundError,
+	UnauthenticatedError,
+	ValidationError,
+} from '@/utils/errors.js';
 import { logger } from '@/utils/logger.js';
 import { getUserIdFromRequest } from '@/utils/request-auth.js';
 import { fail, success } from '@/utils/response.js';
@@ -57,18 +62,20 @@ export async function slicesRoutes(fastify: FastifyInstance) {
 				error: error instanceof Error ? error.message : String(error),
 			});
 
-			// 认证错误
-			if (error instanceof Error && error.message.includes('未认证')) {
-				return reply.status(401).send(fail('请先登录', 'UNAUTHORIZED'));
+			// ✅ 使用 instanceof 检查错误类型
+			if (error instanceof UnauthenticatedError) {
+				return reply.status(401).send(fail('请先登录', 'UNAUTHENTICATED'));
 			}
 
-			// 验证错误
 			if (error instanceof ValidationError) {
 				return reply.status(400).send(fail(error.message, 'VALIDATION_ERROR'));
 			}
 
-			// 外部服务错误
-			if (error instanceof Error && error.message.includes('切片服务暂时不可用')) {
+			if (error instanceof NotFoundError) {
+				return reply.status(404).send(fail(error.message, 'NOT_FOUND'));
+			}
+
+			if (error instanceof ExternalAPIError) {
 				return reply.status(502).send(fail(error.message, 'EXTERNAL_SERVICE_ERROR'));
 			}
 
@@ -113,13 +120,16 @@ export async function slicesRoutes(fastify: FastifyInstance) {
 				error: error instanceof Error ? error.message : String(error),
 			});
 
-			// 验证错误
-			if (error instanceof ValidationError) {
+			// ✅ 使用 instanceof 检查错误类型
+			if (error instanceof NotFoundError) {
 				return reply.status(404).send(fail(error.message, 'SLICE_TASK_NOT_FOUND'));
 			}
 
-			// 外部服务错误
-			if (error instanceof Error && error.message.includes('切片服务暂时不可用')) {
+			if (error instanceof ValidationError) {
+				return reply.status(400).send(fail(error.message, 'VALIDATION_ERROR'));
+			}
+
+			if (error instanceof ExternalAPIError) {
 				return reply.status(502).send(fail(error.message, 'EXTERNAL_SERVICE_ERROR'));
 			}
 
