@@ -470,25 +470,26 @@ export interface BindPrinterOptions {
  *
  * 核心改进：
  * - 使用 camelCase 参数命名
- * - 绑定成功后返回打印机完整信息
+ * - 绑定成功后返回简单消息（不查询详情，避免 deviceName/deviceId 混淆）
  *
  * @param options 绑定选项（deviceName, code, token 必填）
- * @returns 绑定后的打印机完整信息
+ * @returns 绑定成功消息
  *
  * @throws Error 当外部服务不可用或绑定失败时
  *
  * @example
  * ```typescript
- * const printer = await DeviceService.bindPrinter({
+ * const result = await DeviceService.bindPrinter({
  *   deviceName: 'R1-AX6FFI',
  *   code: 'FTD8CZ',
  *   token: 'Bearer xxx'
  * });
+ * // result = { message: '打印机绑定成功' }
  * ```
  */
 export async function bindPrinter(
 	options: BindPrinterOptions,
-): Promise<import('@/repositories/printer.repository.js').Printer> {
+): Promise<{ message: string }> {
 	const { deviceName, code, token } = options;
 
 	logger.info({
@@ -511,10 +512,13 @@ export async function bindPrinter(
 			deviceName,
 		});
 
-		// 绑定成功后，获取打印机完整信息
-		const printer = await getPrinter(deviceName, token);
-
-		return printer;
+		// 直接返回成功消息，不查询详情
+		// 原因：绑定接口返回的是 deviceName，但查询详情需要 deviceId
+		// 避免 deviceName/deviceId 混淆导致的查询失败
+		// 用户可以在列表页面刷新查看新绑定的打印机
+		return {
+			message: '打印机绑定成功',
+		};
 	} catch (error) {
 		logger.error({
 			msg: '❌ 绑定打印机失败（新版本）',

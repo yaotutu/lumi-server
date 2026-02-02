@@ -250,7 +250,7 @@ export const getPrinterStatusSchema = {
 export const bindPrinterSchema = {
 	tags: ['打印机管理'],
 	summary: '绑定打印机',
-	description: '绑定新打印机，绑定成功后返回打印机完整信息。',
+	description: '绑定新打印机，绑定成功后返回成功消息。客户端需要刷新打印机列表以查看新绑定的打印机。',
 
 	body: Type.Object({
 		/** 设备名称 */
@@ -262,8 +262,8 @@ export const bindPrinterSchema = {
 	response: {
 		201: JSendSuccess(
 			Type.Object({
-				/** 绑定后的打印机完整信息 */
-				printer: PrinterSchema,
+				/** 成功消息 */
+				message: Type.String({ description: '绑定成功消息' }),
 			}),
 		),
 		400: JSendFail,

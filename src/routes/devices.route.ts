@@ -439,7 +439,7 @@ export async function devicesRoutes(fastify: FastifyInstance) {
 	 * {
 	 *   status: 'success',
 	 *   data: {
-	 *     printer: {...}  // 绑定后的打印机完整信息
+	 *     message: '打印机绑定成功'
 	 *   }
 	 * }
 	 */
@@ -466,14 +466,14 @@ export async function devicesRoutes(fastify: FastifyInstance) {
 			});
 
 			// 第 4 步：调用 Service 层（新版本）
-			const printer = await DeviceService.bindPrinter({
+			const result = await DeviceService.bindPrinter({
 				deviceName,
 				code,
 				token,
 			});
 
 			// 第 5 步：返回成功响应（201 Created）
-			return reply.status(201).send(success({ printer }));
+			return reply.status(201).send(success(result));
 		} catch (error) {
 			// 错误处理
 			logger.error({
