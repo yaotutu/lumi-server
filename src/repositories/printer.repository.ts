@@ -135,30 +135,24 @@ export interface PrinterStatusData {
  *
  * 外部服务状态映射规则：
  * - status: 0=离线, 1=在线
- * - state: 0=空闲, 1=打印中, 2=暂停, 3=错误
+ * - task: 有值=有任务（打印中）, null=空闲（idle）
  *
  * @param status 外部服务的 status 字段（0=离线, 1=在线）
- * @param state 外部服务的 state 字段（0=空闲, 1=打印中, 2=暂停, 3=错误）
+ * @param task 外部服务的 task 字段（有值=有任务, null=空闲）
  * @returns 打印机状态枚举
  */
-function mapPrinterStatus(status: number, state?: number): PrinterStatus {
+function mapPrinterStatus(status: number, task?: any): PrinterStatus {
 	// 如果离线，直接返回 OFFLINE
 	if (status === 0) {
 		return PrinterStatus.OFFLINE;
 	}
 
-	// 如果在线，根据 state 判断具体状态
-	if (state === 1) {
+	// 如果在线且有任务，返回 PRINTING
+	if (status === 1 && task) {
 		return PrinterStatus.PRINTING;
 	}
-	if (state === 2) {
-		return PrinterStatus.PAUSED;
-	}
-	if (state === 3) {
-		return PrinterStatus.ERROR;
-	}
 
-	// 默认返回 ONLINE（在线但空闲）
+	// 在线且空闲，返回 ONLINE
 	return PrinterStatus.ONLINE;
 }
 
@@ -174,7 +168,7 @@ function transformBasicPrinterData(data: any): Printer {
 		name: data.name || data.device_name,
 		deviceName: data.device_name,
 		model: data.product_name,
-		status: mapPrinterStatus(data.status),
+		status: mapPrinterStatus(data.status, null), // 基本信息没有 task，传 null
 		lastOnline:
 			data.last_online_time > 0 ? new Date(data.last_online_time * 1000).toISOString() : null,
 		firmwareVersion: data.firmware_version,
@@ -197,7 +191,7 @@ function transformPrinterData(data: any, status?: any, task?: any): Printer {
 		name: data.name || data.device_name,
 		deviceName: data.device_name,
 		model: data.product_name,
-		status: mapPrinterStatus(data.status, status?.state),
+		status: mapPrinterStatus(data.status, task), // 使用 task 判断状态
 		lastOnline:
 			data.last_online_time > 0 ? new Date(data.last_online_time * 1000).toISOString() : null,
 		firmwareVersion: data.firmware_version,
@@ -243,7 +237,7 @@ function transformPrinterData(data: any, status?: any, task?: any): Printer {
  */
 function transformPrinterStatus(status: any, task?: any): PrinterStatusData {
 	return {
-		status: mapPrinterStatus(1, status.state),
+		status: mapPrinterStatus(1, task), // 使用 task 判断状态
 		realtimeStatus: {
 			nozzleTemperature: {
 				current: status.nozzle_temperature.temperature,
