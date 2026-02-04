@@ -40,6 +40,11 @@ export interface CreateSliceTaskRequest {
 	object_url: string;
 	/** 文件名（必填，用于显示和日志） */
 	file_name: string;
+	/** 任务信息（可选） */
+	task_info?: {
+		/** 模型来源：ai_created（AI 生成）或 user_uploaded（用户上传） */
+		model_source: 'ai_created' | 'user_uploaded';
+	};
 }
 
 /**

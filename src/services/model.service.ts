@@ -160,6 +160,7 @@ export async function createModelForRequest(requestId: string, imageIndex: numbe
 	const model = await modelRepository.create({
 		id: modelId,
 		externalUserId: request.externalUserId,
+		source: 'AI_GENERATED', // ✅ 显式设置模型来源为 AI 生成
 		requestId,
 		sourceImageId: selectedImage.id,
 		name: modelName,

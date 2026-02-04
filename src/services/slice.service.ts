@@ -140,6 +140,11 @@ export async function createSliceTask(
 		const createResponse = await slicerClient.createSliceTask({
 			object_url: objectUrl,
 			file_name: fileName,
+			task_info: {
+				// 映射数据库枚举值到外部服务格式
+				// AI_GENERATED → ai_created, USER_UPLOADED → user_uploaded
+				model_source: model.source === 'AI_GENERATED' ? 'ai_created' : 'user_uploaded',
+			},
 		});
 
 		sliceTaskId = createResponse.slice_task_id;
