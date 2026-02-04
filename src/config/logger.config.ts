@@ -30,8 +30,8 @@ const _customTransportPath = join(__dirname, '../transports/pino-pretty-console.
  * - 彩色高亮
  */
 export const pinoPrettyOptionsForConsole: PrettyOptions = {
-	// 单行显示（核心优化）
-	singleLine: true,
+	// 多行显示，JSON 自动缩进（提升可读性）
+	singleLine: false,
 
 	// 彩色输出
 	colorize: true,
