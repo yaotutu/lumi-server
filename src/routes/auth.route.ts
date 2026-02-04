@@ -26,7 +26,9 @@ import {
 	sendCodeSchema,
 } from '@/schemas/auth.schema';
 import * as AuthService from '@/services/auth.service';
+import { ExternalAPIError, UnauthenticatedError, ValidationError } from '@/utils/errors';
 import { logger } from '@/utils/logger';
+import { getAuthTokenFromRequest } from '@/utils/request-auth';
 import { fail, success } from '@/utils/response';
 
 /**
@@ -57,8 +59,20 @@ export async function authRoutes(fastify: FastifyInstance) {
 			return reply.send(success(null));
 		} catch (error) {
 			logger.error({ msg: '发送验证码失败', error });
-			// 服务器内部错误，返回 500 状态码
-			return reply.status(500).send(fail('发送验证码失败'));
+
+			// 使用 instanceof 检查错误类型
+			if (error instanceof ValidationError) {
+				return reply.status(400).send(fail(error.message, 'VALIDATION_ERROR'));
+			}
+
+			if (error instanceof ExternalAPIError) {
+				return reply
+					.status(502)
+					.send(fail('发送验证码失败：用户服务暂时不可用', 'EXTERNAL_SERVICE_ERROR'));
+			}
+
+			// 未预期错误
+			return reply.status(500).send(fail('发送验证码失败，请稍后重试', 'INTERNAL_SERVER_ERROR'));
 		}
 	});
 
@@ -80,8 +94,20 @@ export async function authRoutes(fastify: FastifyInstance) {
 			return reply.send(success(null));
 		} catch (error) {
 			logger.error({ msg: '注册失败', error });
-			// 服务器内部错误，返回 500 状态码
-			return reply.status(500).send(fail('注册失败'));
+
+			// 使用 instanceof 检查错误类型
+			if (error instanceof ValidationError) {
+				return reply.status(400).send(fail(error.message, 'VALIDATION_ERROR'));
+			}
+
+			if (error instanceof ExternalAPIError) {
+				return reply
+					.status(502)
+					.send(fail('注册失败：用户服务暂时不可用', 'EXTERNAL_SERVICE_ERROR'));
+			}
+
+			// 未预期错误
+			return reply.status(500).send(fail('注册失败，请稍后重试', 'INTERNAL_SERVER_ERROR'));
 		}
 	});
 
@@ -106,8 +132,24 @@ export async function authRoutes(fastify: FastifyInstance) {
 			);
 		} catch (error) {
 			logger.error({ msg: '用户登录失败', error });
-			// 服务器内部错误，返回 500 状态码
-			return reply.status(500).send(fail('登录失败'));
+
+			// 使用 instanceof 检查错误类型
+			if (error instanceof UnauthenticatedError) {
+				return reply.status(401).send(fail('登录失败：验证码错误或已过期', 'UNAUTHENTICATED'));
+			}
+
+			if (error instanceof ValidationError) {
+				return reply.status(400).send(fail(error.message, 'VALIDATION_ERROR'));
+			}
+
+			if (error instanceof ExternalAPIError) {
+				return reply
+					.status(502)
+					.send(fail('登录失败：用户服务暂时不可用', 'EXTERNAL_SERVICE_ERROR'));
+			}
+
+			// 未预期错误
+			return reply.status(500).send(fail('登录失败，请稍后重试', 'INTERNAL_SERVER_ERROR'));
 		}
 	});
 
@@ -143,19 +185,27 @@ export async function authRoutes(fastify: FastifyInstance) {
 	 */
 	fastify.post('/api/auth/logout', { schema: logoutSchema }, async (request, reply) => {
 		try {
-			// 从 Authorization header 获取 Token
-			const authHeader = request.headers.authorization;
-			if (!authHeader) {
+			// 使用统一工具函数获取 Token
+			const token = getAuthTokenFromRequest(request);
+			if (!token) {
 				return reply.send(success(null));
 			}
 
 			// 调用外部用户服务退出登录
-			await userClient.logout(authHeader);
+			await userClient.logout(token);
 
 			// 退出成功
 			return reply.send(success(null));
 		} catch (error) {
 			logger.error({ msg: '退出登录失败', error });
+
+			// 使用 instanceof 检查错误类型
+			if (error instanceof ExternalAPIError) {
+				// 外部服务错误，但仍返回成功（本地清除状态即可）
+				logger.warn({ msg: '外部服务退出登录失败，但本地已清除状态', error });
+				return reply.send(success(null));
+			}
+
 			// 即使出错，也返回成功（本地清除状态即可）
 			return reply.send(success(null));
 		}

@@ -113,9 +113,10 @@ export type PrintStatus =
 // 切片状态（独立于打印状态）
 export const sliceStatusEnum = mysqlEnum('slice_status', [
 	'PENDING',
+	'FETCHING', // 正在获取模型文件
 	'PROCESSING',
 	'COMPLETED',
 	'FAILED',
 ]);
 
-export type SliceStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+export type SliceStatus = 'PENDING' | 'FETCHING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';

@@ -25,6 +25,7 @@ export const getUserByIdSchema = {
 		400: JSendFail, // 用户服务返回的错误
 		401: JSendFail, // 未认证
 		404: JSendFail, // 用户不存在
+		502: JSendFail, // 外部服务错误
 		500: JSendFail, // 服务器内部错误
 	},
 } as const;
@@ -55,6 +56,7 @@ export const updateUserSchema = {
 				code: Type.String(),
 			}),
 		}),
+		502: JSendFail, // 外部服务错误
 	},
 } as const;
 
@@ -85,6 +87,7 @@ export const modifyPasswordSchema = {
 				code: Type.String(),
 			}),
 		}),
+		502: JSendFail, // 外部服务错误
 	},
 } as const;
 

@@ -44,21 +44,40 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
 
 	// 如果有 Token，尝试验证并填充 request.user（可选认证）
 	if (authHeader?.startsWith('Bearer ')) {
-		const externalUser = await externalUserService.verifyTokenAndGetUser(authHeader);
+		try {
+			const externalUser = await externalUserService.verifyTokenAndGetUser(authHeader);
 
-		if (externalUser) {
-			// ✅ Token 有效，填充 request.user
-			request.user = {
-				id: externalUser.user_id,
-				email: externalUser.email,
-				userName: externalUser.user_name,
-			};
+			if (externalUser) {
+				// ✅ Token 有效，填充 request.user
+				request.user = {
+					id: externalUser.user_id,
+					email: externalUser.email,
+					userName: externalUser.user_name,
+				};
 
-			logger.debug({
-				msg: '✅ 认证通过（可选认证）',
+				logger.debug({
+					msg: '✅ 认证通过（可选认证）',
+					pathname,
+					method,
+					externalUserId: externalUser.user_id,
+				});
+			}
+			// 如果 externalUser 为 null，说明 Token 无效，不填充 request.user
+			// 后续会根据是否需要认证来决定是否返回 401
+		} catch (error) {
+			// ❗ 外部用户服务不可用（网络错误、服务故障等）
+			// 返回 502，前端不会清空 Token，只显示错误提示
+			logger.error({
+				msg: '❌ 外部用户服务不可用',
 				pathname,
 				method,
-				externalUserId: externalUser.user_id,
+				error: error instanceof Error ? error.message : String(error),
+			});
+
+			return reply.status(502).send({
+				status: 'error',
+				message: '用户服务暂时不可用，请稍后重试',
+				code: 'USER_SERVICE_UNAVAILABLE',
 			});
 		}
 	}

@@ -28,6 +28,7 @@ export const sendCodeSchema = {
 	response: {
 		200: JSendSuccess(Type.Null()),
 		400: JSendFail, // 参数错误
+		502: JSendFail, // 外部服务错误
 		500: JSendFail, // 发送失败
 	},
 } as const;
@@ -53,6 +54,7 @@ export const registerSchema = {
 	response: {
 		200: JSendSuccess(Type.Null()),
 		400: JSendFail, // 验证码错误或已过期
+		502: JSendFail, // 外部服务错误
 		500: JSendFail, // 注册失败
 	},
 } as const;
@@ -85,6 +87,7 @@ export const loginSchema = {
 		),
 		400: JSendFail, // 验证码错误或已过期
 		401: JSendFail, // 登录失败
+		502: JSendFail, // 外部服务错误
 		500: JSendFail, // 服务器错误
 	},
 } as const;
@@ -141,6 +144,7 @@ export const logoutSchema = {
 	description: '注销当前登录会话',
 	response: {
 		200: JSendSuccess(Type.Null()),
+		502: JSendFail, // 外部服务错误
 		500: JSendFail, // 服务器错误（即使出错也会返回成功，本地清除状态即可）
 	},
 } as const;

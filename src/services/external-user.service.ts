@@ -5,10 +5,12 @@
  * 重构说明：
  * - 现在使用统一的 UserServiceClient 进行调用
  * - 保持接口不变，避免影响认证中间件
+ * - 区分"Token 无效"和"外部服务故障"，提升用户体验
  */
 
 import { getUserServiceClient } from '@/clients/user';
 import config from '@/config/index';
+import { UnauthenticatedError } from '@/utils/errors.js';
 import { logger } from '@/utils/logger';
 
 /**
@@ -28,8 +30,13 @@ export interface ExternalUser {
 /**
  * 验证 Token 并获取用户信息
  *
+ * 错误处理策略：
+ * - Token 无效（401）：返回 null，中间件会返回 401，前端清空 Token
+ * - 外部服务故障（网络错误、5xx）：抛出异常，中间件会返回 502，前端不清空 Token
+ *
  * @param token Bearer Token（已包含 "Bearer " 前缀）
  * @returns 用户信息 或 null（Token 无效）
+ * @throws Error 当外部用户服务不可用时（网络错误、服务故障等）
  */
 export async function verifyTokenAndGetUser(token: string): Promise<ExternalUser | null> {
 	try {
@@ -50,9 +57,23 @@ export async function verifyTokenAndGetUser(token: string): Promise<ExternalUser
 
 		return userInfo as ExternalUser;
 	} catch (error) {
-		// Client 中间层会抛出 UnauthenticatedError 或 ExternalAPIError
-		// 认证失败或外部服务错误都返回 null
-		logger.error({ msg: '调用外部用户服务失败', error });
-		return null;
+		// ✅ 区分错误类型，提升用户体验
+		if (error instanceof UnauthenticatedError) {
+			// Token 无效（401），返回 null
+			// 中间件会返回 401，前端会清空 Token 并弹出登录弹窗
+			logger.warn({
+				msg: '⚠️ Token 无效或已过期',
+				error: error.message,
+			});
+			return null;
+		}
+
+		// ❗ 外部服务错误（网络错误、服务故障、超时等），抛出异常
+		// 中间件会返回 502，前端不会清空 Token，只显示错误提示
+		logger.error({
+			msg: '❌ 外部用户服务不可用',
+			error: error instanceof Error ? error.message : String(error),
+		});
+		throw new Error('用户服务暂时不可用，请稍后重试');
 	}
 }

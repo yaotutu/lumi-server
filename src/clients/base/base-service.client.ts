@@ -105,7 +105,7 @@ export abstract class BaseServiceClient {
 
 		// 第 5 步：记录响应日志
 		if (this.enableLogging) {
-			this.logResponse(url, response.status, body);
+			this.logResponse(url, response, body);
 		}
 
 		// 第 6 步：HTTP 错误检查（仅检查网络层错误，业务错误由子类处理）
@@ -243,14 +243,21 @@ export abstract class BaseServiceClient {
 	 * 记录响应日志（私有方法）
 	 *
 	 * @param url - 请求 URL
-	 * @param status - HTTP 状态码
+	 * @param response - fetch 响应对象
 	 * @param body - 响应体
 	 */
-	private logResponse(url: string, status: number, body: unknown): void {
+	private logResponse(url: string, response: Response, body: unknown): void {
+		// 提取响应 headers（转换为普通对象）
+		const headers: Record<string, string> = {};
+		response.headers.forEach((value, key) => {
+			headers[key] = value;
+		});
+
 		logger.info({
 			msg: `📥 [${this.constructor.name}] 收到响应`,
 			url,
-			statusCode: status,
+			statusCode: response.status,
+			headers, // ✅ 新增：响应 headers
 			body,
 		});
 	}

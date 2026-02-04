@@ -36,7 +36,7 @@ export async function routes(fastify: FastifyInstance) {
 	await fastify.register(interactionRoutes);
 	await fastify.register(modelRoutes); // ✅ 新增：模型管理路由
 	await fastify.register(slicesRoutes); // ✅ 新增：切片路由
-	await fastify.register(devicesRoutes); // ✅ 新增：设备管理路由
+	await fastify.register(devicesRoutes); // ✅ 新增：设备管理路由（包含 /api/printers RESTful API）
 
 	// Worker 状态路由
 	await fastify.register(workerRoutes);
