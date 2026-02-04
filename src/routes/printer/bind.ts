@@ -14,9 +14,8 @@
 
 import { Type } from '@sinclair/typebox';
 import type { FastifyPluginAsync } from 'fastify';
-import { getAuthTokenFromRequest } from '@/utils/auth-helpers.js';
-import { NotFoundError, ValidationError } from '@/utils/errors.js';
-import { fail, success } from '@/utils/response-helpers.js';
+import { getAuthTokenFromRequest } from '@/utils/request-auth.js';
+import { fail, success } from '@/utils/response.js';
 
 /**
  * 绑定请求 Schema
@@ -43,6 +42,20 @@ const BindResponseSchema = Type.Object({
 });
 
 /**
+ * 错误响应 Schema
+ */
+const ErrorResponseSchema = Type.Object({
+	status: Type.Union([Type.Literal('fail'), Type.Literal('error')]),
+	data: Type.Optional(Type.Object({
+		message: Type.String(),
+		code: Type.Optional(Type.String()),
+		details: Type.Optional(Type.Unknown()),
+	})),
+	message: Type.Optional(Type.String()),
+	code: Type.Optional(Type.String()),
+});
+
+/**
  * 打印机绑定路由插件
  */
 const bindRoute: FastifyPluginAsync = async (fastify) => {
@@ -60,6 +73,9 @@ const bindRoute: FastifyPluginAsync = async (fastify) => {
 				body: BindRequestSchema,
 				response: {
 					200: BindResponseSchema,
+					400: ErrorResponseSchema,
+					401: ErrorResponseSchema,
+					500: ErrorResponseSchema,
 				},
 			},
 		},
@@ -71,10 +87,7 @@ const bindRoute: FastifyPluginAsync = async (fastify) => {
 				// 如果没有 Token，返回 401
 				if (!token) {
 					return reply.status(401).send(
-						fail({
-							message: '未登录',
-							code: 'UNAUTHORIZED',
-						}),
+						fail('未登录', 'UNAUTHORIZED'),
 					);
 				}
 
@@ -107,29 +120,21 @@ const bindRoute: FastifyPluginAsync = async (fastify) => {
 				if (data.code !== 200) {
 					// 绑定失败
 					return reply.status(400).send(
-						fail({
-							message: data.msg || '绑定失败',
-							code: 'BIND_FAILED',
-						}),
+						fail(data.msg || '绑定失败', 'BIND_FAILED'),
 					);
 				}
 
 				// 绑定成功
 				return reply.status(200).send(
-					success({
-						message: '绑定成功',
-					}),
+					success({ message: '绑定成功' }),
 				);
 			} catch (error) {
 				// 捕获未预期的错误
-				fastify.log.error('绑定打印机失败:', error);
+				fastify.log.error({ error }, '绑定打印机失败');
 
 				// 返回 500 错误
 				return reply.status(500).send(
-					fail({
-						message: '绑定打印机失败',
-						code: 'INTERNAL_ERROR',
-					}),
+					fail('绑定打印机失败', 'INTERNAL_ERROR'),
 				);
 			}
 		},
